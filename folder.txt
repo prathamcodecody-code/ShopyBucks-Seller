@@ -1,0 +1,20 @@
+seller-frontend/
+└── app/
+    ├── layout.tsx
+    ├── page.tsx                  # redirect to /dashboard
+    ├── dashboard/
+    │   └── page.tsx
+    ├── products/
+    │   ├── page.tsx
+    │   ├── create/page.tsx
+    │   └── [id]/edit/page.tsx
+    ├── orders/
+    │   ├── page.tsx
+    │   └── [id]/page.tsx
+    ├── analytics/
+    │   └── page.tsx
+    ├── settings/
+    │   └── page.tsx
+    ├── auth/
+    │   └── login/page.tsx
+    └── not-found.tsx
