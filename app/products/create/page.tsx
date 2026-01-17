@@ -41,7 +41,12 @@ export default function CreateProductPage() {
   const [metaDescription, setMetaDescription] = useState("");
   const [metaKeywords, setMetaKeywords] = useState("");
   const [slug, setSlug] = useState("");
-  const [images, setImages] = useState([null, null, null, null]);
+  const [images, setImages] = useState<(File | null)[]>([
+  null,
+  null,
+  null,
+  null,
+]);
   const [sizes, setSizes] = useState<{ size: string; stock: number; price?: number }[]>([]);
 
   // Fetch Logic (Simplified for brevity, keep your existing logic)
@@ -350,4 +355,5 @@ const createProduct = async () => {
       </div>
     </SellerLayout>
   );
+
 }
