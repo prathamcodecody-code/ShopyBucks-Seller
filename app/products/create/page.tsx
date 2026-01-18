@@ -88,17 +88,22 @@ const createProduct = async () => {
 
     const hasSizes = sizes.length > 0;
 
-    if (hasSizes) {
-      if (sizes.some(s => !s.size || s.stock <= 0)) {
-        alert("Invalid size stock");
-        return;
-      }
-    } else {
-      if (!price || !stock) {
-        alert("Price and stock are required");
-        return;
-      }
-    }
+    if (!price || Number(price) <= 0) {
+  alert("Base price is required");
+  return;
+}
+
+if (!stock || Number(stock) < 0) {
+  alert("Base stock is required");
+  return;
+}
+
+if (sizes.length > 0) {
+  if (sizes.some(s => !s.size || s.stock <= 0)) {
+    alert("Invalid size stock");
+    return;
+  }
+}
 
     const fd = new FormData();
 
@@ -113,10 +118,10 @@ const createProduct = async () => {
     fd.append("metaDescription", metaDescription || description.slice(0, 160));
     fd.append("metaKeywords", metaKeywords || "");
 
-    if (!hasSizes) {
-      fd.append("price", Number(price).toString());
-      fd.append("stock", Number(stock).toString());
-    } else {
+    fd.append("price", Number(price).toString());
+    fd.append("stock", Number(stock).toString());
+    
+    if (sizes.length > 0)  {
       fd.append("sizes", JSON.stringify(sizes));
     }
 
@@ -355,5 +360,4 @@ const createProduct = async () => {
       </div>
     </SellerLayout>
   );
-
 }
