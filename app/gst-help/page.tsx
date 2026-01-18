@@ -55,9 +55,12 @@ export default function GSTSupportPage() {
             Starting your online business shouldn't be blocked by paperwork. Our dedicated CA team helps you get registered quickly at a minimal cost.
           </p>
           <div className="pt-6">
-            <button className="bg-amazon-darkBlue text-white px-10 py-4 rounded-2xl font-black text-lg shadow-xl hover:bg-amazon-navy transition-all active:scale-95">
-              Talk to a GST Expert
-            </button>
+            {/* Added Link to Hero Button */}
+            <Link href="https://www.firststartup.in/">
+              <button className="bg-amazon-darkBlue text-white px-10 py-4 rounded-2xl font-black text-lg shadow-xl hover:bg-amazon-navy transition-all active:scale-95">
+                Talk to a GST Expert
+              </button>
+            </Link>
           </div>
         </div>
       </section>
@@ -100,7 +103,6 @@ export default function GSTSupportPage() {
             ))}
           </div>
         </div>
-        {/* Decorative Blur */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-amazon-orange/10 rounded-full blur-[120px]" />
       </section>
 
@@ -116,7 +118,7 @@ export default function GSTSupportPage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link 
-                href="/auth/login"
+                href="https://www.firststartup.in/"
                 className="w-full sm:w-auto px-10 py-4 bg-amazon-orange text-amazon-darkBlue rounded-2xl font-black text-lg shadow-lg hover:bg-amazon-orangeHover transition-all flex items-center justify-center gap-2"
               >
                 Register Now <ArrowRight size={20} />
