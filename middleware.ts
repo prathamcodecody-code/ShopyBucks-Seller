@@ -6,16 +6,20 @@ export function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   const isAuthPage = pathname.startsWith("/auth");
-  const isSellerPage = pathname.startsWith("/seller");
+  const isProtectedPage =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/seller") ||
+    pathname.startsWith("/products") ||
+    pathname.startsWith("/orders");
 
-  // ❌ Not logged in → force login
-  if (!token && isSellerPage) {
+  // ❌ Not logged in → block protected pages
+  if (!token && isProtectedPage) {
     return NextResponse.redirect(new URL("/auth/login", req.url));
   }
 
-  // ✅ Logged in → prevent returning to login
+  // ✅ Logged in → prevent going back to login
   if (token && isAuthPage) {
-    return NextResponse.redirect(new URL("/seller/onboarding", req.url));
+    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
   return NextResponse.next();
@@ -23,7 +27,10 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
+    "/dashboard/:path*",
     "/seller/:path*",
+    "/products/:path*",
+    "/orders/:path*",
     "/auth/:path*",
   ],
 };
