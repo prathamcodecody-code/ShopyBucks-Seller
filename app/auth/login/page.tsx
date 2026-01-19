@@ -4,169 +4,267 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/app/context/AuthContext";
 import { useRouter } from "next/navigation";
+import { 
+  ShieldCheck, 
+  ArrowLeft, 
+  Loader2, 
+  Store, 
+  TrendingUp, 
+  CheckCircle2 
+} from "lucide-react";
+import Link from "next/link";
 
-export default function LoginPage() {
+type Step = "loginPassword" | "loginOtpSend" | "loginOtpVerify" | "signup" | "signupOtp";
+
+export default function SellerAuthPage() {
   const { loginWithToken } = useAuth();
   const router = useRouter();
 
-  const [step, setStep] = useState<"details" | "otp">("details");
+  const [step, setStep] = useState<Step>("loginPassword");
+  const [loading, setLoading] = useState(false);
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const sendOtp = async () => {
-    if (!phone || !name || !email) return;
+  const handleSuccess = async (token: string, user: any) => {
+    await loginWithToken(token);
+    if (user.role === "ADMIN") {
+      router.replace("/admin/dashboard");
+    } else if (user.role === "SELLER" && user.sellerStatus === "APPROVED") {
+      router.replace("/dashboard");
+    } else {
+      router.replace("/seller/onboarding");
+    }
+  };
+
+  const loginPassword = async () => {
     setLoading(true);
     try {
-      await api.post("/auth/send-otp", { phone, name, email });
-      setStep("otp");
-    } catch (err) {
-      alert("Failed to send OTP. Please try again.");
+      const res = await api.post("/auth/login/password", { email, password });
+      await handleSuccess(res.data.token, res.data.user);
+    } catch {
+      alert("Invalid email or password");
     } finally {
       setLoading(false);
     }
   };
 
-const verifyOtp = async () => {
-  if (loading) return;
-  setLoading(true);
+  const sendLoginOtp = async () => {
+    setLoading(true);
+    try {
+      await api.post("/auth/login/otp/send", { phone });
+      setStep("loginOtpVerify");
+    } catch {
+      alert("Phone number not registered");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  try {
-    const res = await api.post("/auth/verify-otp", { phone, otp });
-    const { token, user } = res.data;
+  const verifyLoginOtp = async () => {
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/login/otp/verify", { phone, otp });
+      await handleSuccess(res.data.token, res.data.user);
+    } catch {
+      alert("Invalid OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    if (!token || !user) throw new Error("Invalid response");
+  const signup = async () => {
+    setLoading(true);
+    try {
+      await api.post("/auth/signup", { name, email, phone, password });
+      setStep("signupOtp");
+    } catch {
+      alert("User already exists");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // 🔑 Store token FIRST (sync)
-    await loginWithToken(token); // ✅ Wait for user to be fetched
-
-    // 🔁 Navigate based on role
-    if (user.role === "ADMIN") {
-  router.replace("/admin/dashboard");
-} else if (user.role === "SELLER" && user.sellerStatus === "APPROVED") {
-  router.replace("/dashboard"); // Go straight to dashboard
-} else {
-  router.replace("/seller/onboarding"); // Go to onboarding for PENDING/NONE/REJECTED
-}
-
-    // ✅ NEW: Default for USER role → onboarding
-    router.replace("/seller/onboarding");
-    return;
-
-  } catch (err) {
-    alert("OTP verification failed");
-  } finally {
-    setLoading(false);
-  }
-};
-
+  const verifySignupOtp = async () => {
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/signup/verify-otp", { phone, otp });
+      await handleSuccess(res.data.token, res.data.user);
+    } catch {
+      alert("Invalid OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white sm:bg-amazon-lightGray px-4">
-      {/* Optional Logo Placeholder */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-amazon-darkBlue italic">Shopy Bucks</h1>
-      </div>
+    <main className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-white font-sans text-amazon-text">
+      
+      {/* LEFT PANEL - BRANDING (Visible on Desktop) */}
+      <section className="hidden lg:flex flex-col justify-between bg-amazon-darkBlue p-16 text-white relative overflow-hidden">
+        <div className="relative z-10">
+          <Link href="/" className="inline-block mb-12">
+             <div className="flex items-center text-3xl font-black uppercase tracking-tighter">
+                <span className="text-white">Shopy</span>
+                <span className="text-amazon-orange italic ml-0.5">Bucks</span>
+             </div>
+          </Link>
+          
+          <h2 className="text-5xl font-black leading-tight mb-8">
+            Scale your business with <br />
+            <span className="text-amazon-orange italic underline decoration-4 underline-offset-8">Zero Commission</span>
+          </h2>
+          
+          <ul className="space-y-6">
+            {[
+              { icon: <Store className="text-amazon-orange" />, text: "Reach 50 Million+ Customers" },
+              { icon: <TrendingUp className="text-amazon-orange" />, text: "Fastest Payouts in the Industry" },
+              { icon: <CheckCircle2 className="text-amazon-orange" />, text: "24/7 Seller Support" },
+            ].map((item, i) => (
+              <li key={i} className="flex items-center gap-4 text-xl font-bold opacity-90">
+                <div className="p-2 bg-white/10 rounded-lg">{item.icon}</div>
+                {item.text}
+              </li>
+            ))}
+          </ul>
+        </div>
 
-      <div className="bg-white p-8 w-full max-w-[400px] border border-transparent sm:border-amazon-borderGray rounded-lg shadow-none sm:shadow-sm">
-        {step === "details" && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-normal text-amazon-text mb-6">Create Account</h2>
-            
-            <div>
-              <label className="block text-sm font-bold mb-1 text-amazon-text">Your name</label>
-              <input
-                placeholder="First and last name"
-                className="w-full border border-gray-400 focus:border-amazon-orange focus:ring-1 focus:ring-amazon-orange outline-none p-2.5 rounded-md transition-all"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
+        <div className="relative z-10 flex items-center gap-3 p-6 bg-white/5 border border-white/10 rounded-2xl w-fit">
+          <ShieldCheck className="text-amazon-success" size={32} />
+          <div>
+            <p className="font-black text-sm uppercase tracking-widest">Secure Payments</p>
+            <p className="text-xs text-gray-400 font-medium">PCI-DSS Compliant Infrastructure</p>
+          </div>
+        </div>
+
+        {/* Decorative Circle */}
+        <div className="absolute -bottom-20 -left-20 w-[500px] h-[500px] bg-amazon-orange/5 rounded-full blur-3xl" />
+      </section>
+
+      {/* RIGHT PANEL - AUTH FORMS */}
+      <section className="flex flex-col items-center justify-center p-8 lg:p-24 relative bg-amazon-lightGray lg:bg-white">
+        
+        {/* Mobile Header */}
+        <div className="lg:hidden mb-12 text-center">
+            <div className="flex items-center text-2xl font-black uppercase tracking-tighter mb-2">
+                <span className="text-[#4F1271]">Shopy</span>
+                <span className="text-amazon-orange italic ml-0.5">Bucks</span>
             </div>
+            <p className="text-xs font-black uppercase tracking-widest text-amazon-mutedText">Seller Central</p>
+        </div>
 
-            <div>
-              <label className="block text-sm font-bold mb-1 text-amazon-text">Email</label>
-              <input
-                type="email"
-                className="w-full border border-gray-400 focus:border-amazon-orange focus:ring-1 focus:ring-amazon-orange outline-none p-2.5 rounded-md transition-all"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold mb-1 text-amazon-text">Mobile number</label>
-              <input
-                placeholder="e.g. +1 234 567 890"
-                className="w-full border border-gray-400 focus:border-amazon-orange focus:ring-1 focus:ring-amazon-orange outline-none p-2.5 rounded-md transition-all"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </div>
-
-            <button
-              onClick={sendOtp}
-              disabled={loading}
-              className="w-full bg-amazon-orange hover:bg-amazon-orangeHover text-amazon-darkBlue font-medium py-2 rounded-md shadow-sm border border-orange-500 transition-colors mt-2"
-            >
-              {loading ? "Sending OTP..." : "Verify Mobile Number"}
-            </button>
-
-            <p className="text-xs text-amazon-mutedText leading-relaxed mt-4">
-              By creating an account, you agree to our <span className="text-blue-700 hover:underline cursor-pointer">Conditions of Use</span> and <span className="text-blue-700 hover:underline cursor-pointer">Privacy Notice</span>.
+        <div className="w-full max-w-[420px] bg-white lg:bg-transparent p-8 lg:p-0 rounded-[2.5rem] shadow-xl lg:shadow-none border border-gray-100 lg:border-none">
+          
+          {/* Form Header */}
+          <div className="mb-10 text-center lg:text-left">
+            <h1 className="text-3xl font-black tracking-tight text-amazon-darkBlue">
+              {step === "signup" ? "Get Started" : "Welcome Back"}
+            </h1>
+            <p className="text-amazon-mutedText font-bold mt-2">
+              {step === "signup" ? "Enter details to create your seller account" : "Manage your store and orders seamlessly"}
             </p>
           </div>
-        )}
 
-        {step === "otp" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-2xl font-normal">Verify OTP</h2>
-              <button 
-                onClick={() => setStep("details")}
-                className="text-sm text-blue-700 hover:underline"
-              >
-                Change
-              </button>
-            </div>
-            
-            <p className="text-sm text-amazon-mutedText mb-4">
-              We've sent a code to <span className="font-bold">{phone}</span>
-            </p>
+          <div className="space-y-5">
+            {/* LOGIN PASSWORD */}
+            {step === "loginPassword" && (
+              <>
+                <AuthInput label="Email Address" placeholder="name@company.com" value={email} onChange={setEmail} />
+                <AuthInput label="Password" type="password" placeholder="••••••••" value={password} onChange={setPassword} />
+                <div className="pt-2">
+                    <SubmitButton loading={loading} onClick={loginPassword}>Log in to Dashboard</SubmitButton>
+                </div>
+                
+                <div className="relative py-4">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+                    <div className="relative flex justify-center text-xs uppercase font-black"><span className="bg-white lg:bg-white px-4 text-amazon-mutedText tracking-widest">Or continue with</span></div>
+                </div>
 
-            <input
-              placeholder="6-digit code"
-              maxLength={6}
-              className="w-full border border-gray-400 focus:border-amazon-orange focus:ring-1 focus:ring-amazon-orange outline-none p-2.5 rounded-md text-center text-xl tracking-widest transition-all"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-            />
+                <div className="grid grid-cols-2 gap-4">
+                    <button onClick={() => setStep("loginOtpSend")} className="py-3 border-2 border-gray-100 rounded-xl font-bold text-sm hover:border-amazon-orange hover:bg-amazon-orange/5 transition-all">Login with OTP</button>
+                    <button onClick={() => setStep("signup")} className="py-3 border-2 border-gray-100 rounded-xl font-bold text-sm hover:border-amazon-orange hover:bg-amazon-orange/5 transition-all">Create Account</button>
+                </div>
+              </>
+            )}
 
-            <button
-              onClick={verifyOtp}
-              disabled={loading}
-              className="w-full bg-amazon-orange hover:bg-amazon-orangeHover text-amazon-darkBlue font-medium py-2 rounded-md shadow-sm border border-orange-500 transition-colors"
-            >
-              {loading ? "Verifying..." : "Create your account"}
-            </button>
-            
-            <button 
-              className="w-full text-sm text-amazon-mutedText hover:text-amazon-text mt-4"
-              onClick={sendOtp}
-            >
-              Resend OTP
-            </button>
+            {/* OTP FLOWS */}
+            {step === "loginOtpSend" && (
+              <>
+                <BackButton onClick={() => setStep("loginPassword")} />
+                <AuthInput label="Phone Number" placeholder="Enter registered number" value={phone} onChange={setPhone} />
+                <SubmitButton loading={loading} onClick={sendLoginOtp}>Send 6-Digit OTP</SubmitButton>
+              </>
+            )}
+
+            {(step === "loginOtpVerify" || step === "signupOtp") && (
+              <>
+                <div className="text-center bg-amazon-orange/10 p-4 rounded-2xl mb-4">
+                    <p className="text-sm font-bold text-amazon-darkBlue">Enter code sent to <span className="underline">{phone}</span></p>
+                </div>
+                <AuthInput label="OTP" placeholder="XXXXXX" maxLength={6} value={otp} onChange={setOtp} className="text-center tracking-[1em] text-2xl font-black" />
+                <SubmitButton loading={loading} onClick={step === "signupOtp" ? verifySignupOtp : verifyLoginOtp}>
+                   Verify & Access Dashboard
+                </SubmitButton>
+              </>
+            )}
+
+            {/* SIGNUP */}
+            {step === "signup" && (
+              <>
+                <BackButton onClick={() => setStep("loginPassword")} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <AuthInput label="Business Name" placeholder="Store name" value={name} onChange={setName} />
+                    <AuthInput label="Work Email" placeholder="email@biz.com" value={email} onChange={setEmail} />
+                </div>
+                <AuthInput label="Phone Number" placeholder="+91" value={phone} onChange={setPhone} />
+                <AuthInput label="Create Password" type="password" placeholder="Min 8 characters" value={password} onChange={setPassword} />
+                <SubmitButton loading={loading} onClick={signup}>Create Seller Account</SubmitButton>
+              </>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      </section>
+    </main>
+  );
+}
 
-      <div className="mt-8 text-xs text-amazon-mutedText space-x-6">
-        <span className="hover:underline cursor-pointer">Conditions of Use</span>
-        <span className="hover:underline cursor-pointer">Privacy Notice</span>
-        <span className="hover:underline cursor-pointer">Help</span>
-      </div>
-      <p className="mt-4 text-[11px] text-amazon-mutedText">© 2026, Shopy Bucks</p>
+/* SUB-COMPONENTS */
+
+function AuthInput({ label, value, onChange, type = "text", placeholder, className = "", ...props }: any) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-[10px] font-black uppercase tracking-widest text-amazon-mutedText ml-1">{label}</label>
+      <input
+        {...props}
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full bg-gray-50/50 border-2 border-gray-100 p-4 rounded-2xl outline-none focus:bg-white focus:border-amazon-orange focus:ring-4 focus:ring-amazon-orange/10 transition-all font-bold placeholder:font-medium placeholder:text-gray-300 ${className}`}
+      />
     </div>
+  );
+}
+
+function SubmitButton({ children, onClick, loading }: any) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className="w-full bg-amazon-orange hover:bg-amazon-orangeHover text-amazon-darkBlue py-4 rounded-2xl font-black text-lg transition-all active:scale-95 shadow-lg shadow-amazon-orange/20 disabled:opacity-50 flex items-center justify-center gap-2"
+    >
+      {loading ? <Loader2 className="animate-spin" size={24} /> : children}
+    </button>
+  );
+}
+
+function BackButton({ onClick }: any) {
+  return (
+    <button onClick={onClick} className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-amazon-mutedText hover:text-amazon-orange transition-colors mb-4">
+      <ArrowLeft size={16} /> Back
+    </button>
   );
 }
