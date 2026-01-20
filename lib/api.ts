@@ -3,7 +3,7 @@ import axios from "axios";
 console.log("API Base URL:", process.env.NEXT_PUBLIC_API_URL);
 
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3030",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
 });
 
 api.interceptors.request.use((config) => {
@@ -35,7 +35,19 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (status === 401) window.location.href = "/auth/login";
+    if (status === 401) {
+  const path = window.location.pathname;
+
+  const publicPaths = [
+    "/",
+    "/auth/login",
+    "/auth/signup",
+  ];
+
+  if (!publicPaths.includes(path)) {
+    window.location.href = "/auth/login";
+  }
+};
     if (status === 403) window.location.href = "/403";
     if (status === 404) window.location.href = "/not-found";
     if (status >= 500) window.location.href = "/error";
