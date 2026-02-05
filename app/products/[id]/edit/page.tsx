@@ -5,19 +5,22 @@ import SellerLayout from "@/components/layout/SellerLayout";
 import { api } from "@/lib/api";
 import { useRouter, useParams } from "next/navigation";
 import { 
-  ArrowLeft, 
-  Upload, 
-  X, 
-  Globe, 
-  Package, 
-  Trash2, 
-  Plus, 
-  Layers 
+  ArrowLeft, Upload, X, Globe, Package, Trash2, Plus, Layers, 
+  IndianRupee, BarChart3, Save, Calendar, Scale, ChevronRight, Info, Truck
 } from "lucide-react";
 
-type SizeInput = {
+const SIZE_OPTIONS = ["Free Size", "XS", "S", "M", "L", "XL", "XXL", "3XL"];
+const SEASONS = ["Summer", "Winter", "Spring", "Autumn", "All Season"];
+const OCCASIONS = ["Casual", "Formal", "Party", "Festive", "Wedding", "Sports"];
+
+type Variant = {
+  id?: number;
+  color: string;
   size: string;
+  sku?: string;
+  price?: number;
   stock: number;
+  images: (File | string | null)[]; // Can be URL string or new File
 };
 
 export default function SellerEditProductPage() {
@@ -25,264 +28,259 @@ export default function SellerEditProductPage() {
   const { id } = useParams();
   const productId = Number(id);
 
-  const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Form States
+  // BASIC STATES
   const [title, setTitle] = useState("");
-  const [price, setPrice] = useState("");
-  const [stock, setStock] = useState("");
   const [description, setDescription] = useState("");
-  const [metaTitle, setMetaTitle] = useState("");
-  const [metaDescription, setMetaDescription] = useState("");
-  const [metaKeywords, setMetaKeywords] = useState("");
-  const [sizes, setSizes] = useState<SizeInput[]>([]);
+  const [price, setPrice] = useState(""); 
+  const [sku, setSku] = useState("");
+  const [season, setSeason] = useState("");
+  const [occasion, setOccasion] = useState("");
+  const [weight, setWeight] = useState("");
 
-  // Image States
-  const [images, setImages] = useState<(File | null)[]>([null, null, null, null]);
-  const [existingImages, setExistingImages] = useState<(string | null)[]>([null, null, null, null]);
+  // FINANCIAL STATES
+  const [discountType, setDiscountType] = useState<"" | "PERCENT" | "FLAT">("");
+  const [discountValue, setDiscountValue] = useState("");
+  const [gstPercent, setGstPercent] = useState("18");
+  const [commissionPct, setCommissionPct] = useState("10");
+
+  // MEDIA & VARIANTS
+  const [images, setImages] = useState<(File | string | null)[]>([null, null, null, null]);
+  const [variants, setVariants] = useState<Variant[]>([]);
+
+  // SEO
+  const [metaTitle, setMetaTitle] = useState("");
+  const [slug, setSlug] = useState("");
 
   useEffect(() => {
     api.get(`/seller/products/${productId}`).then((res) => {
       const p = res.data;
-      setProduct(p);
-      setTitle(p.title);
-      setDescription(p.description);
-      setPrice(String(p.price));
-      setStock(String(p.stock));
-      setExistingImages([p.img1, p.img2, p.img3, p.img4]);
+      setTitle(p.title || "");
+      setDescription(p.description || "");
+      setPrice(String(p.price || ""));
+      setSku(p.sku || "");
+      setWeight(String(p.weight || ""));
+      setSeason(p.seasonTags?.[0] || "");
+      setOccasion(p.occasionTags?.[0] || "");
+      setDiscountType(p.discountType || "");
+      setDiscountValue(String(p.discountValue || ""));
+      setGstPercent(String(p.gstPercent || "18"));
       setMetaTitle(p.metaTitle || "");
-      setMetaDescription(p.metaDescription || "");
-      setMetaKeywords(p.metaKeywords || "");
-      if (Array.isArray(p.productsize)) {
-        setSizes(p.productsize.map((s: any) => ({ size: s.size, stock: s.stock })));
+      setSlug(p.slug || "");
+      
+      // Load Main Images (Existing URLs)
+      setImages([p.image1, p.image2, p.image3, p.image4]);
+
+      // Load Variants
+      if (p.variants) {
+        setVariants(p.variants.map((v: any) => ({
+          id: v.id,
+          color: v.color,
+          size: v.size,
+          sku: v.sku,
+          stock: v.stock,
+          price: v.price,
+          images: [v.image1, v.image2, v.image3, v.image4]
+        })));
       }
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [productId]);
 
-  const handleImageChange = (index: number, file: File) => {
-    const updated = [...images];
-    updated[index] = file;
-    setImages(updated);
-    const existing = [...existingImages];
-    existing[index] = null;
-    setExistingImages(existing);
-  };
-
-  const removeImage = (index: number) => {
-    const updatedNew = [...images];
-    updatedNew[index] = null;
-    setImages(updatedNew);
-    const updatedOld = [...existingImages];
-    updatedOld[index] = null;
-    setExistingImages(updatedOld);
-  };
+  // CALCULATIONS (Same as Create Page)
+  const sPrice = Number(price) || 0;
+  const dValue = Number(discountValue) || 0;
+  const itemWeight = Number(weight) || 0;
+  let mrp = sPrice;
+  if (discountType === "PERCENT" && dValue > 0) mrp = Math.round(sPrice / (1 - dValue / 100));
+  if (discountType === "FLAT" && dValue > 0) mrp = sPrice + dValue;
+  const estimatedShipping = itemWeight > 0 ? Math.ceil(itemWeight / 500) * 65 : 0;
+  const commissionAmt = (sPrice * Number(commissionPct)) / 100;
+  const gstAmt = (sPrice * Number(gstPercent)) / 100;
+  const netProfit = sPrice - (commissionAmt + gstAmt + estimatedShipping);
 
   const updateProduct = async () => {
-    const formData = new FormData();
-    // (Your existing logic for appending changed fields...)
-    formData.append("title", title);
-    formData.append("description", description);
-    formData.append("price", price);
-    formData.append("stock", stock);
-    formData.append("metaTitle", metaTitle);
-    formData.append("metaDescription", metaDescription);
-    formData.append("metaKeywords", metaKeywords);
-    
-    images.forEach((img, i) => { if (img) formData.append(`image${i + 1}`, img); });
-
     try {
-      await api.patch(`/seller/products/${productId}`, formData);
-      alert("Product updated successfully");
+      const fd = new FormData();
+      fd.append("title", title);
+      fd.append("description", description);
+      fd.append("price", price);
+      fd.append("weight", weight);
+      fd.append("mrp", mrp.toString());
+      fd.append("gstPercent", gstPercent);
+      fd.append("discountType", discountType);
+      fd.append("discountValue", dValue.toString());
+      if (season) fd.append("seasonTags", JSON.stringify([season]));
+      if (occasion) fd.append("occasionTags", JSON.stringify([occasion]));
+
+      // Main Images Handling
+      images.forEach((img, i) => {
+        if (img instanceof File) fd.append(`image${i + 1}`, img);
+        else if (typeof img === 'string') fd.append(`existing_image${i + 1}`, img);
+      });
+
+      // Variants Handling
+      fd.append("variants", JSON.stringify(variants.map(v => ({
+        id: v.id,
+        color: v.color,
+        size: v.size,
+        stock: v.stock,
+        price: v.price || sPrice,
+      }))));
+
+      await api.patch(`/seller/products/${productId}`, fd);
       router.push("/products");
     } catch (err) {
       alert("Failed to update product");
     }
   };
 
-  if (loading) {
-    return (
-      <SellerLayout>
-        <div className="flex flex-col items-center justify-center py-32 space-y-4">
-          <div className="w-8 h-8 border-4 border-amazon-orange border-t-transparent rounded-full animate-spin" />
-          <p className="text-amazon-mutedText font-medium">Loading Product Data...</p>
-        </div>
-      </SellerLayout>
-    );
-  }
+  if (loading) return <div className="p-20 text-center font-bold">Loading...</div>;
 
   return (
     <SellerLayout>
-      <div className="max-w-6xl mx-auto pb-20 p-6">
-        {/* Navigation */}
-        <button 
-          onClick={() => router.push("/products")}
-          className="flex items-center gap-2 text-sm text-blue-600 hover:underline mb-6 font-medium"
-        >
-          <ArrowLeft size={16} /> Back to Products
-        </button>
-
-        <div className="flex justify-between items-end mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-amazon-text tracking-tight">Edit Product</h1>
-            <p className="text-amazon-mutedText">ID: #PROD-{productId} — Update your listing details.</p>
-          </div>
-          <button 
-            onClick={updateProduct} 
-            className="px-8 py-2.5 bg-amazon-orange hover:bg-amazon-orangeHover text-amazon-darkBlue font-bold rounded-lg shadow-sm border border-orange-500 transition-colors"
-          >
-            Update Listing
+      <div className="max-w-[1400px] mx-auto pb-20 px-4">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 pt-4">
+          <button onClick={() => router.back()} className="flex items-center gap-2 text-amazon-mutedText hover:text-amazon-text font-bold text-sm">
+            <ArrowLeft size={16}/> Back
           </button>
+          <div className="flex gap-3 w-full md:w-auto">
+            <button onClick={updateProduct} className="flex-1 md:flex-none px-10 py-2.5 font-black bg-amazon-orange hover:bg-amazon-orangeHover text-amazon-darkBlue rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+              <Save size={18} /> Update Listing
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* BASIC DETAILS */}
-            <section className="bg-white rounded-xl border border-amazon-borderGray shadow-sm overflow-hidden">
-              <div className="p-5 border-b bg-gray-50 flex items-center gap-2">
-                <Package size={18} className="text-amazon-orange" />
-                <h2 className="font-bold text-amazon-text">Basic Details</h2>
+          <div className="lg:col-span-2 space-y-8">
+            {/* Basic Info */}
+            <div className="bg-white rounded-2xl border border-amazon-borderGray p-6 space-y-6">
+              <div className="flex items-center gap-3 pb-4 border-b">
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Info size={20}/></div>
+                <h2 className="text-xl font-black">Edit Information</h2>
               </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-amazon-mutedText uppercase mb-1.5">Product Title</label>
-                  <input
-                    className="w-full border border-amazon-borderGray focus:ring-1 focus:ring-amazon-orange outline-none p-2.5 rounded-lg"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-amazon-mutedText uppercase mb-1.5">Description</label>
-                  <textarea
-                    rows={4}
-                    className="w-full border border-amazon-borderGray focus:ring-1 focus:ring-amazon-orange outline-none p-2.5 rounded-lg"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-amazon-mutedText uppercase mb-1.5">Price (₹)</label>
-                    <input
-                      type="number"
-                      className="w-full border border-amazon-borderGray outline-none p-2.5 rounded-lg"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-amazon-mutedText uppercase mb-1.5">Total Inventory</label>
-                    <input
-                      type="number"
-                      className="w-full border border-amazon-borderGray outline-none p-2.5 rounded-lg"
-                      value={stock}
-                      onChange={(e) => setStock(e.target.value)}
-                    />
-                  </div>
-                </div>
+              <div className="space-y-4">
+                <input value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-gray-50/50 border-2 border-gray-100 p-3 rounded-xl font-bold outline-none" placeholder="Product Title" />
+                <textarea rows={4} value={description} onChange={e => setDescription(e.target.value)} className="w-full bg-gray-50/50 border-2 border-gray-100 p-3 rounded-xl font-medium outline-none" placeholder="Description" />
               </div>
-            </section>
+            </div>
 
-            {/* SIZES */}
-            <section className="bg-white rounded-xl border border-amazon-borderGray shadow-sm overflow-hidden">
-              <div className="p-5 border-b bg-gray-50 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <Layers size={18} className="text-amazon-orange" />
-                  <h2 className="font-bold text-amazon-text">Sizes & Stock</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSizes([...sizes, { size: "", stock: 0 }])}
-                  className="flex items-center gap-1 text-xs font-bold bg-amazon-darkBlue text-white px-3 py-1.5 rounded-md"
-                >
-                  <Plus size={14} /> Add Size
-                </button>
+            {/* Financials */}
+            <div className="bg-white rounded-2xl border border-amazon-borderGray p-6">
+              <div className="flex items-center gap-3 pb-4 border-b mb-6">
+                <div className="p-2 bg-green-50 text-green-600 rounded-lg"><IndianRupee size={20}/></div>
+                <h2 className="text-xl font-black">Pricing & Logistics</h2>
               </div>
-              <div className="p-6 space-y-3">
-                {sizes.length === 0 ? (
-                  <p className="text-sm text-amazon-mutedText text-center py-4 italic">No variant sizes configured for this product.</p>
-                ) : (
-                  sizes.map((s, i) => (
-                    <div key={i} className="flex gap-3 items-center bg-gray-50 p-3 rounded-lg border border-transparent hover:border-amazon-borderGray transition-all">
-                      <input
-                        className="flex-1 border border-amazon-borderGray p-2 rounded-md bg-white text-sm outline-none focus:ring-1 focus:ring-amazon-orange"
-                        placeholder="Size (e.g. XL)"
-                        value={s.size}
-                        onChange={(e) => {
-                          const updated = [...sizes];
-                          updated[i].size = e.target.value;
-                          setSizes(updated);
-                        }}
-                      />
-                      <input
-                        type="number"
-                        className="w-24 border border-amazon-borderGray p-2 rounded-md bg-white text-sm outline-none focus:ring-1 focus:ring-amazon-orange"
-                        placeholder="Qty"
-                        value={s.stock}
-                        onChange={(e) => {
-                          const updated = [...sizes];
-                          updated[i].stock = Number(e.target.value);
-                          setSizes(updated);
-                        }}
-                      />
-                      <button onClick={() => setSizes(sizes.filter((_, idx) => idx !== i))} className="text-amazon-danger p-2 hover:bg-red-50 rounded-md transition-colors">
-                        <Trash2 size={18} />
-                      </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="number" value={price} onChange={e => setPrice(e.target.value)} className="w-full bg-gray-50 border-2 p-3 rounded-xl font-black text-lg" placeholder="Price" />
+                    <div className="relative">
+                      <input type="number" value={weight} onChange={e => setWeight(e.target.value)} className="w-full bg-gray-50 border-2 p-3 rounded-xl font-bold" placeholder="Grams" />
+                      <Scale className="absolute right-3 top-3 text-gray-400" size={18} />
                     </div>
-                  ))
-                )}
+                  </div>
+                  <select value={gstPercent} onChange={e => setGstPercent(e.target.value)} className="w-full bg-gray-50 border-2 p-3 rounded-xl font-bold">
+                    <option value="5">5% (Essentials)</option>
+                    <option value="12">12% (Standard)</option>
+                    <option value="18">18% (Services/Electronics)</option>
+                    <option value="28">28% (Luxury)</option>
+                  </select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <select value={discountType} onChange={e => setDiscountType(e.target.value as any)} className="w-full bg-gray-50 border-2 p-3 rounded-xl font-bold">
+                      <option value="">No Discount</option>
+                      <option value="PERCENT">Percent (%)</option>
+                      <option value="FLAT">Flat (₹)</option>
+                    </select>
+                    {discountType && <input type="number" value={discountValue} onChange={e => setDiscountValue(e.target.value)} className="w-full bg-gray-50 border-2 p-3 rounded-xl font-bold" />}
+                  </div>
+                </div>
+
+                {/* Profit Preview */}
+                <div className="bg-amazon-darkBlue rounded-2xl p-6 text-white space-y-4 shadow-xl">
+                   <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                    <span className="text-xs font-black uppercase text-amazon-orange">Net Earnings</span>
+                    <span className="text-2xl font-black text-amazon-success">₹{netProfit.toFixed(2)}</span>
+                  </div>
+                  <div className="space-y-2 text-sm opacity-80">
+                    <div className="flex justify-between"><span>MRP</span><span>₹{mrp}</span></div>
+                    <div className="flex justify-between"><span>GST</span><span>-₹{gstAmt.toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span>Shipping Idea</span><span>-₹{estimatedShipping}</span></div>
+                  </div>
+                </div>
               </div>
-            </section>
+            </div>
+
+            {/* Variants */}
+            <div className="bg-white rounded-2xl border border-amazon-borderGray p-6 space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b">
+                <h2 className="text-xl font-black">Manage Variants</h2>
+                <button onClick={() => setVariants([...variants, { color: "", size: "", stock: 0, images: [null, null, null, null] }])} className="px-4 py-2 bg-amazon-darkBlue text-white text-xs font-black rounded-lg"><Plus size={14} className="inline mr-1"/> Add Variant</button>
+              </div>
+              <div className="space-y-6">
+                {variants.map((v, idx) => (
+                  <div key={idx} className="bg-gray-50/50 border-2 rounded-2xl p-5 relative">
+                    <button onClick={() => setVariants(variants.filter((_, i) => i !== idx))} className="absolute -top-2 -right-2 bg-white border p-1.5 rounded-full text-red-500 shadow-sm"><Trash2 size={14}/></button>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      <input value={v.color} onChange={e => { const c = [...variants]; c[idx].color = e.target.value; setVariants(c); }} className="p-2.5 rounded-lg border font-bold text-sm bg-white" placeholder="Color" />
+                      <select value={v.size} onChange={e => { const c = [...variants]; c[idx].size = e.target.value; setVariants(c); }} className="p-2.5 rounded-lg border font-bold text-sm bg-white">
+                        <option value="">Size</option>
+                        {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <input type="number" value={v.stock} onChange={e => { const c = [...variants]; c[idx].stock = Number(e.target.value); setVariants(c); }} className="p-2.5 rounded-lg border font-bold text-sm bg-white" placeholder="Stock" />
+                      <input type="number" value={v.price || ""} onChange={e => { const c = [...variants]; c[idx].price = Number(e.target.value); setVariants(c); }} className="p-2.5 rounded-lg border font-bold text-sm bg-white" placeholder={`₹${price}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          {/* SIDEBAR */}
-          <div className="space-y-6">
-            <section className="bg-white rounded-xl border border-amazon-borderGray shadow-sm p-5">
-              <h2 className="font-bold text-amazon-text mb-4">Gallery</h2>
+          {/* Sidebar */}
+          <div className="space-y-8">
+            <div className="bg-white rounded-2xl border border-amazon-borderGray p-6 space-y-4">
+              <h3 className="font-black flex items-center gap-2 uppercase text-xs tracking-widest"><Layers size={16} className="text-amazon-orange"/> Style Tags</h3>
+              <select value={season} onChange={e => setSeason(e.target.value)} className="w-full border-2 p-3 rounded-xl font-bold bg-gray-50/50 outline-none">
+                <option value="">Select Season</option>
+                {SEASONS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select value={occasion} onChange={e => setOccasion(e.target.value)} className="w-full border-2 p-3 rounded-xl font-bold bg-gray-50/50 outline-none">
+                <option value="">Select Occasion</option>
+                {OCCASIONS.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-amazon-borderGray p-6">
+              <h3 className="font-black flex items-center gap-2 uppercase text-xs tracking-widest mb-4"><Upload size={16} className="text-amazon-orange"/> Main Gallery</h3>
               <div className="grid grid-cols-2 gap-3">
-                {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="relative aspect-square rounded-lg border-2 border-dashed border-amazon-borderGray hover:border-amazon-orange transition-colors group overflow-hidden bg-gray-50">
-                    {existingImages[i] || images[i] ? (
-                      <>
+                {images.map((img, idx) => (
+                  <div key={idx} className="relative aspect-square rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
+                    {img ? (
+                      <div className="relative w-full h-full group">
                         <img 
-                          src={existingImages[i] ? `${process.env.NEXT_PUBLIC_API_URL}/uploads/products/${existingImages[i]}` : URL.createObjectURL(images[i]!)} 
+                          src={img instanceof File ? URL.createObjectURL(img) : `${process.env.NEXT_PUBLIC_API_URL}/uploads/products/${img}`} 
                           className="w-full h-full object-cover" 
                         />
-                        <button onClick={() => removeImage(i)} className="absolute top-1 right-1 bg-white/90 p-1 rounded-full text-amazon-danger hover:bg-white shadow-md">
-                          <X size={14} />
-                        </button>
-                      </>
+                        <button onClick={() => { const i = [...images]; i[idx] = null; setImages(i); }} className="absolute top-1 right-1 bg-white p-1 rounded-full text-red-500 shadow-md"><X size={12}/></button>
+                      </div>
                     ) : (
-                      <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer">
-                        <Upload size={18} className="text-gray-400 group-hover:text-amazon-orange" />
-                        <span className="text-[10px] font-bold text-gray-400 mt-1 uppercase">Replace</span>
-                        <input type="file" className="hidden" accept="image/*" onChange={(e) => e.target.files && handleImageChange(i, e.target.files[0])} />
+                      <label className="cursor-pointer text-center">
+                        <Upload size={18} className="mx-auto text-gray-400" />
+                        <input type="file" className="hidden" accept="image/*" onChange={e => { const i = [...images]; i[idx] = e.target.files?.[0] || null; setImages(i); }} />
                       </label>
                     )}
                   </div>
                 ))}
               </div>
-            </section>
+            </div>
 
-            <section className="bg-white rounded-xl border border-amazon-borderGray shadow-sm p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Globe size={18} className="text-blue-600" />
-                <h2 className="font-bold text-amazon-text">SEO Settings</h2>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-amazon-mutedText uppercase mb-1">Meta Title</label>
-                  <input className="w-full border border-amazon-borderGray rounded-md p-2 text-sm outline-none focus:ring-1 focus:ring-amazon-orange" value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-amazon-mutedText uppercase mb-1">Meta Description</label>
-                  <textarea rows={3} className="w-full border border-amazon-borderGray rounded-md p-2 text-sm outline-none focus:ring-1 focus:ring-amazon-orange" value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} />
-                </div>
-              </div>
-            </section>
+            <div className="bg-[#f0f9ff] rounded-2xl p-6 space-y-4 border border-blue-100">
+               <h3 className="font-black flex items-center gap-2 uppercase text-xs tracking-widest text-blue-600"><Globe size={16}/> SEO Settings</h3>
+               <input value={metaTitle} onChange={e => setMetaTitle(e.target.value)} className="w-full bg-white border border-blue-200 p-2.5 rounded-lg text-sm font-bold outline-none" placeholder="Meta Title" />
+               <input value={slug} onChange={e => setSlug(e.target.value)} className="w-full bg-white border border-blue-200 p-2.5 rounded-lg text-sm font-bold outline-none" placeholder="URL Slug" />
+            </div>
           </div>
         </div>
       </div>
