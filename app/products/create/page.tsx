@@ -12,6 +12,13 @@ import {
 const SIZE_OPTIONS = ["Free Size", "XS", "S", "M", "L", "XL", "XXL", "3XL"];
 const SEASONS = ["Summer", "Winter", "Spring", "Autumn", "All Season"];
 const OCCASIONS = ["Casual", "Formal", "Party", "Festive", "Wedding", "Sports"];
+const COLORS = ["Black", "White", "Red", "Blue", "Green", "Yellow", "Orange", "Pink", "Purple", "Brown", "Grey", "Beige"];
+
+type ProductSize = {
+  size: string;
+  stock: number;
+  price?: number;
+};
 
 type Variant = {
   color: string;
@@ -29,10 +36,12 @@ export default function CreateProductPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState(""); 
+  const [stock, setStock] = useState(""); // ✨ NEW: Main product stock
+  const [baseColor, setBaseColor] = useState(""); // ✨ NEW: Main product color
   const [sku, setSku] = useState("");
   const [season, setSeason] = useState("");
   const [occasion, setOccasion] = useState("");
-  const [weight, setWeight] = useState(""); // Weight in Grams
+  const [weight, setWeight] = useState("");
   
   // CATEGORY STATES
   const [categories, setCategories] = useState([]);
@@ -53,6 +62,12 @@ export default function CreateProductPage() {
   const [metaDescription, setMetaDescription] = useState("");
   const [slug, setSlug] = useState("");
   const [images, setImages] = useState<(File | null)[]>([null, null, null, null]);
+  
+  // ✨ NEW: Main product sizes (when hasVariants = false)
+  const [productSizes, setProductSizes] = useState<ProductSize[]>([]);
+  
+  // ✨ NEW: Product mode toggle
+  const [hasVariants, setHasVariants] = useState(false);
   const [variants, setVariants] = useState<Variant[]>([]);
 
   // CALCULATIONS
@@ -60,14 +75,11 @@ export default function CreateProductPage() {
   const dValue = Number(discountValue) || 0;
   const itemWeight = Number(weight) || 0;
 
-  // Logic: MRP calculated based on discount applied to selling price
   let mrp = sPrice;
   if (discountType === "PERCENT" && dValue > 0) mrp = Math.round(sPrice / (1 - dValue / 100));
   if (discountType === "FLAT" && dValue > 0) mrp = sPrice + dValue;
 
-  // Shipping Estimate (₹65 base per 500g)
   const estimatedShipping = itemWeight > 0 ? Math.ceil(itemWeight / 500) * 65 : 0;
-
   const commissionAmt = (sPrice * Number(commissionPct)) / 100;
   const gstAmt = (sPrice * Number(gstPercent)) / 100;
   const totalDeductions = commissionAmt + gstAmt + estimatedShipping;
@@ -105,7 +117,11 @@ export default function CreateProductPage() {
       fd.append("typeId", selectedType);
       fd.append("subtypeId", selectedSubtype);
       fd.append("weight", weight);
+      fd.append("price", price);
       
+      // ✨ ALWAYS send main product fields
+      if (stock) fd.append("stock", stock);
+      if (baseColor) fd.append("baseColor", baseColor);
       if (sku) fd.append("sku", sku);
       if (season) fd.append("seasonTags", JSON.stringify([season]));
       if (occasion) fd.append("occasionTags", JSON.stringify([occasion]));
@@ -119,24 +135,30 @@ export default function CreateProductPage() {
         fd.append("discountValue", dValue.toString());
       }
 
-      if (!variants.length) {
-        alert("At least one variant is required");
-        return;
+      // ✨ hasVariants flag - tells DB if product has color variants
+      fd.append("hasVariants", hasVariants.toString());
+
+      // ✨ ALWAYS send main product sizes if they exist
+      if (productSizes.length > 0) {
+        fd.append("productSizes", JSON.stringify(productSizes));
       }
 
-      fd.append("variants", JSON.stringify(variants.map(v => ({
-        color: v.color,
-        size: v.size,
-        sku: v.sku || null,
-        stock: v.stock,
-        price: v.price || sPrice,
-      }))));
+      // ✨ Send variants only if hasVariants is true
+      if (hasVariants && variants.length > 0) {
+        fd.append("variants", JSON.stringify(variants.map(v => ({
+          color: v.color,
+          size: v.size,
+          sku: v.sku || null,
+          stock: v.stock,
+          price: v.price || sPrice,
+        }))));
 
-      variants.forEach((v, vIndex) => {
-        v.images.forEach((img, imgIndex) => {
-          if (img) fd.append(`variant_${vIndex}_img${imgIndex + 1}`, img);
+        variants.forEach((v, vIndex) => {
+          v.images.forEach((img, imgIndex) => {
+            if (img) fd.append(`variant_${vIndex}_img${imgIndex + 1}`, img);
+          });
         });
-      });
+      }
 
       images.forEach((img, i) => { if (img) fd.append(`image${i + 1}`, img); });
 
@@ -233,7 +255,6 @@ export default function CreateProductPage() {
                     </div>
                   </div>
 
-                  {/* RESTORED: Discount Value Input */}
                   {discountType && (
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black uppercase tracking-widest text-amazon-mutedText">Discount Value</label>
@@ -279,67 +300,150 @@ export default function CreateProductPage() {
               </div>
             </div>
 
-            {/* Variants Card */}
+            {/* Main Product Details - ALWAYS SHOWN */}
             <div className="bg-white rounded-2xl border border-amazon-borderGray shadow-sm p-6 space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Layers size={20}/></div>
-                  <h2 className="text-xl font-black text-amazon-text tracking-tight">Inventory Variants</h2>
-                </div>
-                <button onClick={() => setVariants([...variants, { color: "", size: "", stock: 0, images: [null, null, null, null] }])}
-                  className="px-4 py-2 bg-amazon-darkBlue text-white text-xs font-black rounded-lg hover:bg-black transition-all flex items-center gap-2">
-                  <Plus size={14}/> New Variant
-                </button>
+              <div className="flex items-center gap-3 pb-4 border-b">
+                <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Package size={20}/></div>
+                <h2 className="text-xl font-black text-amazon-text tracking-tight">Main Product Details</h2>
               </div>
 
-              <div className="space-y-6">
-                {variants.map((v, idx) => (
-                  <div key={idx} className="bg-gray-50/50 border-2 border-gray-100 rounded-2xl p-5 relative">
-                    <button onClick={() => setVariants(variants.filter((_, i) => i !== idx))}
-                      className="absolute -top-2 -right-2 bg-white border shadow-sm p-1.5 rounded-full text-red-500 hover:bg-red-50">
-                      <Trash2 size={14}/>
-                    </button>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black uppercase text-amazon-mutedText">Color</label>
-                        <input value={v.color} onChange={e => { const c = [...variants]; c[idx].color = e.target.value; setVariants(c); }} className="w-full p-2.5 rounded-lg border font-bold text-sm bg-white outline-none" placeholder="Red" />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black uppercase text-amazon-mutedText">Size</label>
-                        <select value={v.size} onChange={e => { const c = [...variants]; c[idx].size = e.target.value; setVariants(c); }} className="w-full p-2.5 rounded-lg border font-bold text-sm bg-white outline-none">
-                          <option value="">Size</option>
-                          {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black uppercase text-amazon-mutedText">Stock</label>
-                        <input type="number" value={v.stock} onChange={e => { const c = [...variants]; c[idx].stock = Number(e.target.value); setVariants(c); }} className="w-full p-2.5 rounded-lg border font-bold text-sm bg-white outline-none" />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black uppercase text-amazon-mutedText">Price (Opt)</label>
-                        <input type="number" value={v.price || ""} onChange={e => { const c = [...variants]; c[idx].price = Number(e.target.value); setVariants(c); }} className="w-full p-2.5 rounded-lg border font-bold text-sm bg-white outline-none" placeholder={price} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-4 gap-3">
-                      {v.images.map((img, imgIdx) => (
-                        <div key={imgIdx} className="aspect-square bg-white border-2 border-dashed rounded-xl flex items-center justify-center overflow-hidden hover:border-amazon-orange transition-all relative group">
-                          {img ? (
-                            <>
-                              <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" />
-                              <button onClick={() => { const c = [...variants]; c[idx].images[imgIdx] = null; setVariants(c); }} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white"><X size={16}/></button>
-                            </>
-                          ) : (
-                            <label className="cursor-pointer text-gray-400">
-                              <Plus size={16}/>
-                              <input type="file" className="hidden" accept="image/*" onChange={e => { const c = [...variants]; c[idx].images[imgIdx] = e.target.files?.[0] || null; setVariants(c); }} />
-                            </label>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-amazon-mutedText">Base Color</label>
+                  <select value={baseColor} onChange={e => setBaseColor(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 p-3 rounded-xl outline-none font-bold">
+                    <option value="">Select Color</option>
+                    {COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-amazon-mutedText">Stock Quantity</label>
+                  <input type="number" value={stock} onChange={e => setStock(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-100 p-3 rounded-xl outline-none font-bold" placeholder="0" />
+                </div>
               </div>
+
+              {/* Product Sizes - ALWAYS SHOWN */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-sm">Product Sizes (Optional)</h3>
+                  <button 
+                    onClick={() => setProductSizes([...productSizes, { size: "", stock: 0 }])}
+                    className="px-3 py-1.5 bg-amazon-darkBlue text-white text-xs font-bold rounded-lg flex items-center gap-1"
+                  >
+                    <Plus size={12}/> Add Size
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {productSizes.map((ps, idx) => (
+                    <div key={idx} className="grid grid-cols-3 gap-3 items-center bg-gray-50 p-3 rounded-lg">
+                      <select 
+                        value={ps.size} 
+                        onChange={e => { const s = [...productSizes]; s[idx].size = e.target.value; setProductSizes(s); }}
+                        className="p-2 rounded border font-bold text-sm"
+                      >
+                        <option value="">Select Size</option>
+                        {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <input 
+                        type="number" 
+                        value={ps.stock} 
+                        onChange={e => { const s = [...productSizes]; s[idx].stock = Number(e.target.value); setProductSizes(s); }}
+                        className="p-2 rounded border font-bold text-sm"
+                        placeholder="Stock"
+                      />
+                      <button 
+                        onClick={() => setProductSizes(productSizes.filter((_, i) => i !== idx))}
+                        className="text-red-500 hover:bg-red-50 p-2 rounded"
+                      >
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Color Variants - OPTIONAL */}
+            <div className="bg-white rounded-2xl border border-amazon-borderGray shadow-sm p-6">
+              <div className="flex items-center gap-6 pb-4 border-b mb-6">
+                <div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Layers size={20}/></div>
+                <h2 className="text-xl font-black text-amazon-text">Color Variants</h2>
+                <label className="flex items-center gap-3 cursor-pointer ml-auto">
+                  <input 
+                    type="checkbox" 
+                    checked={hasVariants} 
+                    onChange={e => setHasVariants(e.target.checked)}
+                    className="w-5 h-5 rounded border-2 border-gray-300 text-amazon-orange focus:ring-amazon-orange"
+                  />
+                  <span className="font-bold text-sm">Add color variants</span>
+                </label>
+              </div>
+
+              {hasVariants ? (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600">Add different color options for this product</p>
+                    <button onClick={() => setVariants([...variants, { color: "", size: "", stock: 0, images: [null, null, null, null] }])}
+                      className="px-4 py-2 bg-amazon-darkBlue text-white text-xs font-black rounded-lg hover:bg-black transition-all flex items-center gap-2">
+                      <Plus size={14}/> New Variant
+                    </button>
+                  </div>
+
+                  <div className="space-y-6">
+                    {variants.map((v, idx) => (
+                      <div key={idx} className="bg-gray-50/50 border-2 border-gray-100 rounded-2xl p-5 relative">
+                        <button onClick={() => setVariants(variants.filter((_, i) => i !== idx))}
+                          className="absolute -top-2 -right-2 bg-white border shadow-sm p-1.5 rounded-full text-red-500 hover:bg-red-50">
+                          <Trash2 size={14}/>
+                        </button>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-amazon-mutedText">Color</label>
+                            <input value={v.color} onChange={e => { const c = [...variants]; c[idx].color = e.target.value; setVariants(c); }} className="w-full p-2.5 rounded-lg border font-bold text-sm bg-white outline-none" placeholder="Red" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-amazon-mutedText">Size</label>
+                            <select value={v.size} onChange={e => { const c = [...variants]; c[idx].size = e.target.value; setVariants(c); }} className="w-full p-2.5 rounded-lg border font-bold text-sm bg-white outline-none">
+                              <option value="">Size</option>
+                              {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-amazon-mutedText">Stock</label>
+                            <input type="number" value={v.stock} onChange={e => { const c = [...variants]; c[idx].stock = Number(e.target.value); setVariants(c); }} className="w-full p-2.5 rounded-lg border font-bold text-sm bg-white outline-none" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-amazon-mutedText">Price (Opt)</label>
+                            <input type="number" value={v.price || ""} onChange={e => { const c = [...variants]; c[idx].price = Number(e.target.value); setVariants(c); }} className="w-full p-2.5 rounded-lg border font-bold text-sm bg-white outline-none" placeholder={price} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-3">
+                          {v.images.map((img, imgIdx) => (
+                            <div key={imgIdx} className="aspect-square bg-white border-2 border-dashed rounded-xl flex items-center justify-center overflow-hidden hover:border-amazon-orange transition-all relative group">
+                              {img ? (
+                                <>
+                                  <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" />
+                                  <button onClick={() => { const c = [...variants]; c[idx].images[imgIdx] = null; setVariants(c); }} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white"><X size={16}/></button>
+                                </>
+                              ) : (
+                                <label className="cursor-pointer text-gray-400">
+                                  <Plus size={16}/>
+                                  <input type="file" className="hidden" accept="image/*" onChange={e => { const c = [...variants]; c[idx].images[imgIdx] = e.target.files?.[0] || null; setVariants(c); }} />
+                                </label>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <Layers size={40} className="mx-auto mb-3 opacity-30" />
+                  <p className="text-sm font-medium">No color variants added</p>
+                  <p className="text-xs mt-1">Check the box above to add different colors for this product</p>
+                </div>
+              )}
             </div>
           </div>
 
