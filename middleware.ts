@@ -1,24 +1,22 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export function middleware(req: NextRequest) {
+  // ✅ Must match the cookie name set in loginWithToken
   const token = req.cookies.get("seller_token")?.value;
-  const pathname = req.nextUrl.pathname;
 
+  const { pathname } = req.nextUrl;
   const isAuthPage = pathname.startsWith("/auth");
-  const isProtectedPage =
-    pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/seller") ||
-    pathname.startsWith("/products") ||
-    pathname.startsWith("/orders");
 
-  // ❌ Not logged in → block protected pages
-  if (!token && isProtectedPage) {
-    return NextResponse.redirect(new URL("/auth/login", req.url));
+  // NOT LOGGED IN
+  if (!token) {
+    if (!isAuthPage) {
+      return NextResponse.redirect(new URL("/auth/login", req.url));
+    }
+    return NextResponse.next();
   }
 
-  // ✅ Logged in → prevent going back to login
-  if (token && isAuthPage) {
+  // LOGGED IN — don't let them revisit auth pages
+  if (isAuthPage) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
@@ -31,6 +29,13 @@ export const config = {
     "/seller/:path*",
     "/products/:path*",
     "/orders/:path*",
+    "/analytics/:path*",
+    "/payouts/:path*",
+    "/bank/:path*",
+    "/analytics/:path*",
+    "/sales/:path*",
+    "/settings/:path*",
+    "/notifications/:path*",
     "/auth/:path*",
   ],
 };
