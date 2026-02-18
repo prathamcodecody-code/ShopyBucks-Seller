@@ -1,40 +1,76 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import SellerLayout from "@/components/layout/SellerLayout";
 import { api } from "@/lib/api";
-import { useRouter } from "next/navigation";
-import { Save, Trash2, Plus, X, Upload, ChevronRight } from "lucide-react";
-import { Info, Package, Layers, IndianRupee, Scale } from "lucide-react";
+import {
+  ArrowLeft,
+  Upload,
+  X,
+  Plus,
+  Trash2,
+  DollarSign,
+  TrendingDown,
+  Package,
+  Truck,
+  Calculator,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
 
-/* ================= CONSTANTS ================= */
+/* -------------------------------- TYPES -------------------------------- */
 
-const SIZE_OPTIONS = ["Free Size", "XS", "S", "M", "L", "XL", "XXL", "3XL"];
+type SizeRow = {
+  size: string;
+  enabled: boolean;
+  stock: number;
+  price: string;
+};
+
+type ColorVariant = {
+  color: string;
+  images: (File | null)[];
+  sizes: SizeRow[];
+};
+
+type Attribute = {
+  id: number;
+  slug: string;
+  name: string;
+  type: "TEXT" | "NUMBER" | "BOOLEAN";
+  isFilterable: boolean;
+};
+
+/* ------------------------------- CONSTANTS ------------------------------ */
+
 const COLORS = [
-  "Black", "White", "Red", "Blue", "Green",
-  "Yellow", "Orange", "Pink", "Purple", "Brown", "Grey", "Beige"
+  "Black", "White", "Red", "Blue", "Green", "Yellow",
+  "Pink", "Purple", "Orange", "Brown", "Gray", "Navy",
+  "Beige", "Maroon", "Teal", "Lime", "Coral", "Mint",
 ];
 
-/* ================= TYPES ================= */
+const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "3XL", "4XL"];
 
-type SKU = {
-  color: string;
-  size: string;
-  stock: number;
-  price?: number;
-  images: (File | null)[];
-};
+function freshSizeRows(): SizeRow[] {
+  return SIZES.map((size) => ({ size, enabled: false, stock: 0, price: "" }));
+}
+
+function freshVariant(color = ""): ColorVariant {
+  return { color, images: [null, null, null], sizes: freshSizeRows() };
+}
+
+/* ------------------------------ PAGE ------------------------------------ */
 
 export default function CreateProductPage() {
   const router = useRouter();
 
-  /* ================= BASIC STATE ================= */
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [basePrice, setBasePrice] = useState("");
+  const [price, setPrice] = useState("");
   const [weight, setWeight] = useState("");
+  const [baseColor, setBaseColor] = useState("");
 
-  /* ================= CLASSIFICATION ================= */
   const [categories, setCategories] = useState<any[]>([]);
   const [types, setTypes] = useState<any[]>([]);
   const [subtypes, setSubtypes] = useState<any[]>([]);
@@ -42,527 +78,790 @@ export default function CreateProductPage() {
   const [typeId, setTypeId] = useState("");
   const [subtypeId, setSubtypeId] = useState("");
 
-  /* ================= DISCOUNT ================= */
+  const [attributes, setAttributes] = useState<Attribute[]>([]);
+  const [attributeValues, setAttributeValues] = useState<Record<string, string>>({});
+  const [loadingAttributes, setLoadingAttributes] = useState(false);
+
   const [discountType, setDiscountType] = useState<"" | "PERCENT" | "FLAT">("");
   const [discountValue, setDiscountValue] = useState("");
 
-  /* ================= MEDIA ================= */
+  const [seasonTags, setSeasonTags] = useState<string[]>([]);
+  const [occasionTags, setOccasionTags] = useState<string[]>([]);
+
   const [mainImages, setMainImages] = useState<(File | null)[]>([null, null, null, null]);
+  const [variants, setVariants] = useState<ColorVariant[]>([freshVariant()]);
 
-  /* ================= SKU SYSTEM ================= */
-  const [skus, setSkus] = useState<SKU[]>([
-    {
-      color: "",
-      size: "",
-      stock: 0,
-      price: undefined,
-      images: [null, null, null],
-    },
-  ]);
+  const [pricingModalOpen, setPricingModalOpen] = useState(false);
 
-  /* ================= FETCH CATEGORIES ================= */
+  /* ---------------------------- FETCH DATA ---------------------------- */
+
   useEffect(() => {
-    api.get("/categories").then(r => setCategories(r.data));
+    api.get("/categories")
+      .then((r) => setCategories(r.data))
+      .catch(console.error);
   }, []);
 
   useEffect(() => {
-    if (!categoryId) return;
-    api.get(`/product-types?categoryId=${categoryId}`)
-      .then(r => {
-        setTypes(r.data || []);
-        setTypeId("");
-        setSubtypeId("");
-        setSubtypes([]);
-      });
+    if (!categoryId) {
+      setAttributes([]); setAttributeValues({});
+      setTypes([]); setSubtypes([]);
+      setTypeId(""); setSubtypeId("");
+      return;
+    }
+    const run = async () => {
+      try {
+        const typesRes = await api.get(`/product-types?categoryId=${categoryId}`);
+        setTypes(typesRes.data); setTypeId(""); setSubtypeId("");
+      } catch (e) { console.error(e); }
+
+      setLoadingAttributes(true);
+      try {
+        const attrsRes = await api.get(`/products/category-attributes?categoryId=${categoryId}`);
+        setAttributes(Array.isArray(attrsRes.data) ? attrsRes.data : []);
+      } catch (e) { console.error(e); setAttributes([]); }
+      finally { setLoadingAttributes(false); }
+      setAttributeValues({});
+    };
+    run();
   }, [categoryId]);
 
   useEffect(() => {
-    if (!typeId) return;
+    if (!typeId) { setSubtypes([]); return; }
     api.get(`/product-subtypes?typeId=${typeId}`)
-      .then(r => {
-        setSubtypes(r.data || []);
-        setSubtypeId("");
-      });
+      .then((r) => setSubtypes(r.data))
+      .catch(console.error);
   }, [typeId]);
 
-  /* ================= HELPERS ================= */
-  const updateSKU = (index: number, key: keyof SKU, value: any) => {
-    const copy = [...skus];
-    (copy[index] as any)[key] = value;
-    setSkus(copy);
+  /* ---------------------------- HELPERS ---------------------------- */
+
+  const preview = (f: File | null) => (f ? URL.createObjectURL(f) : null);
+
+  const setMainImg = (i: number, f: File | null) => {
+    setMainImages((prev) => { const n = [...prev]; n[i] = f; return n; });
   };
 
-  const updateSKUImage = (skuIndex: number, imgIndex: number, file: File | null) => {
-    const copy = [...skus];
-    copy[skuIndex].images[imgIndex] = file;
-    setSkus(copy);
-  };
+  const addVariant = () => setVariants((v) => [...v, freshVariant()]);
 
-  const addSKU = () => {
-    setSkus([...skus, {
-      color: "",
-      size: "",
-      stock: 0,
-      price: undefined,
-      images: [null, null, null],
-    }]);
-  };
+  const removeVariant = (vi: number) =>
+    setVariants((v) => v.filter((_, i) => i !== vi));
 
-  const removeSKU = (index: number) => {
-    if (skus.length === 1) {
-      alert("At least one SKU is required");
+  const setVariantColor = (vi: number, color: string) =>
+    setVariants((v) => {
+      const n = [...v];
+      n[vi] = { ...n[vi], color };
+      return n;
+    });
+
+  const setVariantImg = (vi: number, ii: number, f: File | null) =>
+    setVariants((v) => {
+      const n = [...v];
+      const imgs = [...n[vi].images];
+      imgs[ii] = f;
+      n[vi] = { ...n[vi], images: imgs };
+      return n;
+    });
+
+  const toggleSize = (vi: number, si: number) =>
+    setVariants((v) => {
+      const n = [...v];
+      const sizes = [...n[vi].sizes];
+      sizes[si] = { ...sizes[si], enabled: !sizes[si].enabled };
+      n[vi] = { ...n[vi], sizes };
+      return n;
+    });
+
+  const setSizeField = (vi: number, si: number, key: "stock" | "price", val: string) =>
+    setVariants((v) => {
+      const n = [...v];
+      const sizes = [...n[vi].sizes];
+      sizes[si] = { ...sizes[si], [key]: key === "stock" ? Number(val) : val };
+      n[vi] = { ...n[vi], sizes };
+      return n;
+    });
+
+  const enableAllSizes = (vi: number) =>
+    setVariants((v) => {
+      const n = [...v];
+      n[vi] = {
+        ...n[vi],
+        sizes: n[vi].sizes.map((s) => ({ ...s, enabled: true, stock: s.stock || 1 })),
+      };
+      return n;
+    });
+
+  function flattenSkus() {
+    const result: { color: string; size: string | null; stock: number; price?: number }[] = [];
+    for (const v of variants) {
+      if (!v.color) continue;
+      const enabledSizes = v.sizes.filter((s) => s.enabled);
+      if (enabledSizes.length === 0) {
+        result.push({ color: v.color, size: null, stock: 0, price: undefined });
+      } else {
+        for (const s of enabledSizes) {
+          result.push({
+            color: v.color,
+            size: s.size,
+            stock: s.stock,
+            price: s.price ? Number(s.price) : undefined,
+          });
+        }
+      }
+    }
+    return result;
+  }
+
+  /* ---------------------------- PRICING CALC ---------------------------- */
+
+  const basePrice = Number(price) || 0;
+  const itemWeight = Number(weight) || 0;
+  const dValue = Number(discountValue) || 0;
+
+  let mrp = basePrice;
+  if (discountType === "PERCENT" && dValue > 0) {
+    mrp = Math.round(basePrice / (1 - dValue / 100));
+  } else if (discountType === "FLAT" && dValue > 0) {
+    mrp = basePrice + dValue;
+  }
+
+  const discountedPrice =
+    discountType === "PERCENT" && dValue > 0
+      ? Math.round(basePrice * (1 - dValue / 100))
+      : discountType === "FLAT" && dValue > 0
+      ? basePrice - dValue
+      : basePrice;
+
+  const shippingEstimate = itemWeight > 0 ? Math.ceil(itemWeight / 500) * 65 : 0;
+  const platformFee = basePrice * 0.1;
+  const netProfit = discountedPrice - platformFee - shippingEstimate;
+
+  /* ---------------------------- SUBMIT ---------------------------- */
+
+  const submit = async () => {
+    if (!categoryId || !typeId || !subtypeId) {
+      alert("Please select Category, Type and Subtype");
       return;
     }
-    setSkus(skus.filter((_, i) => i !== index));
-  };
 
-  /* ================= VALIDATION ================= */
-  const validateForm = () => {
-    if (!title.trim()) return "Product title is required";
-    if (!categoryId || !typeId || !subtypeId) return "Please select category, type, and subtype";
-    if (!basePrice || Number(basePrice) <= 0) return "Base price is required";
-    if (!weight || Number(weight) <= 0) return "Product weight is required";
-    if (!mainImages[0]) return "At least one main image is required";
-
-    // Validate SKUs
-    const validSKUs = skus.filter(s => s.color && !isNaN(Number(s.stock)) && Number(s.stock) >= 0);
-    
-    if (validSKUs.length === 0) {
-      return "At least one valid SKU (with color and stock) is required";
+    const skus = flattenSkus();
+    if (!skus.length || !skus.some((s) => s.color)) {
+      alert("Please add at least one color variant");
+      return;
     }
-
-    const totalStock = validSKUs.reduce((sum, s) => sum + Number(s.stock), 0);
-    if (totalStock <= 0) {
-      return "Total stock across all SKUs must be greater than 0";
-    }
-
-    // Check for duplicate color+size combinations
-    const seen = new Set<string>();
-    for (const sku of validSKUs) {
-      const key = `${sku.color}_${sku.size || "NA"}`;
-      if (seen.has(key)) {
-        return `Duplicate SKU detected: ${sku.color} ${sku.size || "(no size)"}`;
-      }
-      seen.add(key);
-    }
-
-    return null;
-  };
-
-  /* ================= SUBMIT ================= */
-  const handleSubmit = async () => {
-    const error = validateForm();
-    if (error) {
-      alert(error);
+    if (skus.every((s) => !s.size && s.stock === 0)) {
+      alert("Please enable at least one size with stock > 0");
       return;
     }
 
     try {
       const fd = new FormData();
-
-      // Basic fields
-      fd.append("title", title.trim());
+      fd.append("title", title);
       fd.append("description", description);
-      fd.append("categoryId", categoryId);
-      fd.append("typeId", typeId);
-      fd.append("subtypeId", subtypeId);
-      fd.append("price", basePrice);
-      fd.append("weight", weight);
+      fd.append("categoryId", String(Number(categoryId)));
+      fd.append("typeId", String(Number(typeId)));
+      fd.append("subtypeId", String(Number(subtypeId)));
+      fd.append("price", String(basePrice));
+      fd.append("weight", String(itemWeight));
+      fd.append("baseColor", baseColor || variants[0]?.color || "");
 
-      // Discount
       if (discountType && discountValue) {
         fd.append("discountType", discountType);
-        fd.append("discountValue", discountValue);
+        fd.append("discountValue", String(dValue));
       }
 
-      // SKUs - clean and format
-      const cleanSKUs = skus
-        .filter(s => s.color) // Must have color
-        .map(s => ({
-          color: s.color,
-          size: s.size || null, // Can be empty
-          stock: Number(s.stock),
-          price: s.price ? Number(s.price) : Number(basePrice), // Use base price if not specified
-        }));
+      fd.append("seasonTags", JSON.stringify(seasonTags));
+      fd.append("occasionTags", JSON.stringify(occasionTags));
 
-      fd.append("sizes", JSON.stringify(cleanSKUs));
+      const attrs = Object.entries(attributeValues)
+        .filter(([, v]) => v)
+        .map(([slug, value]) => ({ slug, value }));
+      fd.append("attributes", JSON.stringify(attrs));
 
-      // SKU images
-      skus.forEach((sku, si) => {
-        sku.images.forEach((img, ii) => {
-          if (img) {
-            fd.append(`sku_${si}_img${ii + 1}`, img);
-          }
+      fd.append("sizes", JSON.stringify(skus));
+
+      let skuIndex = 0;
+      for (const v of variants) {
+        if (!v.color) continue;
+        const enabledSizes = v.sizes.filter((s) => s.enabled);
+        const count = enabledSizes.length || 1;
+        v.images.forEach((img, ii) => {
+          if (img) fd.append(`sku_${skuIndex}_img${ii + 1}`, img);
         });
-      });
+        skuIndex += count;
+      }
 
-      // Main images
-      mainImages.forEach((img, i) => {
-        if (img) {
-          fd.append(`image${i + 1}`, img);
-        }
-      });
-
-      console.log("🚀 Submitting product with SKUs:", cleanSKUs);
+      mainImages.forEach((img, i) => img && fd.append(`image${i + 1}`, img));
 
       await api.post("/seller/products", fd);
-      alert("✅ Product created successfully!");
       router.push("/products");
-    } catch (err: any) {
-      console.error("❌ Error:", err);
-      alert(err?.response?.data?.message || "Failed to create product");
+    } catch (error) {
+      console.error("Error creating product:", error);
+      alert("Error creating product. Check console for details.");
     }
   };
 
-  /* ================= RENDER ================= */
+  const usedColors = variants.map((v) => v.color).filter(Boolean);
+
+  /* ---------------------------- RENDER ---------------------------- */
+
   return (
     <SellerLayout>
-      <div className="max-w-[1200px] mx-auto pb-20 px-4">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center py-8 gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">
-              <Package size={14} /> Catalog <ChevronRight size={12} /> New Product
+      <div className="min-h-screen bg-amazon-lightGray">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+          {/* Header */}
+          <div className="mb-8">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-2 text-amazon-mutedText hover:text-amazon-text font-bold text-sm mb-4 transition-colors"
+            >
+              <ArrowLeft size={16} />
+              Back to Inventory
+            </button>
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <h1 className="text-3xl font-black text-amazon-text">Create New Product</h1>
+                <p className="text-amazon-mutedText mt-1">Fill in the details to add a new product to your catalog</p>
+              </div>
+              <button
+                onClick={() => setPricingModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-amazon-orange text-amazon-orange hover:bg-orange-50 rounded-lg font-bold text-sm transition-colors shadow-sm"
+              >
+                <Calculator size={16} />
+                Pricing Preview
+              </button>
             </div>
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Create Product Listing</h1>
-            <p className="text-sm text-gray-500 mt-1">All products use SKUs (color + size combinations)</p>
           </div>
-          <button 
-            onClick={handleSubmit}
-            className="w-full md:w-auto px-10 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"
-          >
-            <Save size={18} /> Publish Listing
-          </button>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            
-            {/* 1. Basic Info */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-              <div className="flex items-center gap-3 pb-4 border-b">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Info size={20}/></div>
-                <h2 className="text-xl font-black text-gray-800">Basic Information</h2>
-              </div>
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-black uppercase text-gray-400 ml-1">
-                    Product Title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    value={title}
-                    onChange={e => setTitle(e.target.value)}
-                    className="w-full bg-gray-50 border-2 border-gray-50 p-4 rounded-xl focus:bg-white focus:border-blue-500 outline-none transition-all font-bold"
-                    placeholder="e.g. Vintage Oversized Hoodie"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-black uppercase text-gray-400 ml-1">Description</label>
-                  <textarea
-                    rows={4}
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    className="w-full bg-gray-50 border-2 border-gray-50 p-4 rounded-xl focus:bg-white focus:border-blue-500 outline-none transition-all font-medium"
-                    placeholder="Describe material, fit, and style..."
-                  />
-                </div>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            {/* 2. Classification */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-              <div className="flex items-center gap-3 pb-4 border-b">
-                <div className="p-2 bg-purple-50 text-purple-600 rounded-lg"><Layers size={20}/></div>
-                <h2 className="text-xl font-black text-gray-800">Classification</h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-black uppercase text-gray-400">Category *</label>
-                  <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-3 rounded-xl font-bold outline-none">
-                    <option value="">Select Category</option>
-                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-black uppercase text-gray-400">Type *</label>
-                  <select disabled={!categoryId} value={typeId} onChange={e => setTypeId(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-3 rounded-xl font-bold outline-none disabled:opacity-50">
-                    <option value="">Select Type</option>
-                    {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-black uppercase text-gray-400">Subtype *</label>
-                  <select disabled={!typeId} value={subtypeId} onChange={e => setSubtypeId(e.target.value)} className="w-full bg-gray-50 border-2 border-gray-50 p-3 rounded-xl font-bold outline-none disabled:opacity-50">
-                    <option value="">Select Subtype</option>
-                    {subtypes.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
+            {/* Left Column — Main content */}
+            <div className="lg:col-span-2 space-y-6">
 
-            {/* 3. SKU Section */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-orange-50 text-orange-600 rounded-lg"><Package size={20}/></div>
+              {/* Basic Info */}
+              <div className="bg-white rounded-xl shadow-sm border border-amazon-borderGray p-6">
+                <div className="flex items-center gap-3 pb-4 border-b border-amazon-borderGray mb-6">
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <Package size={20} className="text-blue-600" />
+                  </div>
+                  <h2 className="text-lg font-black text-amazon-text">Basic Information</h2>
+                </div>
+                <div className="space-y-5">
                   <div>
-                    <h2 className="text-xl font-black text-gray-800">Product SKUs</h2>
-                    <p className="text-xs text-gray-500 mt-1">Define color and size combinations</p>
+                    <label className="block text-sm font-bold text-amazon-text mb-2">Product Title *</label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="e.g. Men's Cotton T-Shirt"
+                      className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-amazon-text mb-2">Description *</label>
+                    <textarea
+                      rows={4}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Describe your product features, materials, care instructions..."
+                      className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 resize-none transition-all"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-bold text-amazon-text mb-2">Base Price (₹) *</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-3.5 text-amazon-mutedText font-bold">₹</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={price}
+                          onChange={(e) => setPrice(e.target.value)}
+                          placeholder="999"
+                          className="w-full pl-8 pr-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 transition-all font-bold"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-amazon-text mb-2">Weight (grams) *</label>
+                      <input
+                        type="number"
+                        value={weight}
+                        onChange={(e) => setWeight(e.target.value)}
+                        placeholder="300"
+                        className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 transition-all font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-amazon-text mb-2">Base Color</label>
+                      <select
+                        value={baseColor}
+                        onChange={(e) => setBaseColor(e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 bg-white transition-all font-bold"
+                      >
+                        <option value="">Select...</option>
+                        {COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
                   </div>
                 </div>
-                <button 
-                  onClick={addSKU}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-black rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus size={16} /> Add SKU
-                </button>
               </div>
 
-              <div className="space-y-6">
-                {skus.map((sku, index) => (
-                  <div key={index} className="relative p-6 bg-gray-50/50 rounded-2xl border-2 border-gray-100 space-y-6">
-                    {skus.length > 1 && (
-                      <button 
-                        onClick={() => removeSKU(index)}
-                        className="absolute top-4 right-4 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    )}
-                    
-                    <div className="pr-10">
-                      <span className="text-xs font-black uppercase text-gray-400">SKU #{index + 1}</span>
-                    </div>
+              {/* Category */}
+              <div className="bg-white rounded-xl shadow-sm border border-amazon-borderGray p-6">
+                <h2 className="text-lg font-black text-amazon-text pb-4 border-b border-amazon-borderGray mb-6">Category & Classification</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-amazon-text mb-2">Category *</label>
+                    <select
+                      value={categoryId}
+                      onChange={(e) => setCategoryId(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 bg-white transition-all font-bold"
+                    >
+                      <option value="">Select...</option>
+                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-amazon-text mb-2">Type *</label>
+                    <select
+                      value={typeId}
+                      onChange={(e) => setTypeId(e.target.value)}
+                      disabled={!categoryId}
+                      className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 bg-white disabled:bg-gray-50 disabled:cursor-not-allowed transition-all font-bold"
+                    >
+                      <option value="">Select...</option>
+                      {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-amazon-text mb-2">Subtype *</label>
+                    <select
+                      value={subtypeId}
+                      onChange={(e) => setSubtypeId(e.target.value)}
+                      disabled={!typeId}
+                      className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 bg-white disabled:bg-gray-50 disabled:cursor-not-allowed transition-all font-bold"
+                    >
+                      <option value="">Select...</option>
+                      {subtypes.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
 
-                    {/* SKU Fields */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-gray-400 ml-1">
-                          Color <span className="text-red-500">*</span>
-                        </label>
-                        <select 
-                          value={sku.color} 
-                          onChange={e => updateSKU(index, "color", e.target.value)} 
-                          className="w-full p-3 bg-white border-2 border-gray-100 rounded-xl font-bold outline-none focus:border-blue-500"
-                        >
-                          <option value="">Select Color</option>
-                          {COLORS.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Size</label>
-                        <select 
-                          value={sku.size} 
-                          onChange={e => updateSKU(index, "size", e.target.value)}
-                          className="w-full p-3 bg-white border-2 border-gray-100 rounded-xl font-bold outline-none focus:border-blue-500"
-                        >
-                          <option value="">No Size</option>
-                          {SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-gray-400 ml-1">
-                          Stock <span className="text-red-500">*</span>
-                        </label>
-                        <input 
-                          type="number" 
-                          min="0"
-                          placeholder="0"
-                          value={sku.stock} 
-                          onChange={e => updateSKU(index, "stock", e.target.value)}
-                          className="w-full p-3 bg-white border-2 border-gray-100 rounded-xl font-bold outline-none focus:border-blue-500"
-                        />
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-gray-400 ml-1">
-                          Price <span className="text-gray-400 text-[9px]">(optional)</span>
-                        </label>
-                        <input 
-                          type="number" 
-                          min="0"
-                          placeholder={basePrice || "Base price"}
-                          value={sku.price ?? ""} 
-                          onChange={e => updateSKU(index, "price", e.target.value)}
-                          className="w-full p-3 bg-white border-2 border-gray-100 rounded-xl font-bold outline-none focus:border-blue-500"
-                        />
-                      </div>
+              {/* Attributes */}
+              {categoryId && (
+                <div className="bg-white rounded-xl shadow-sm border border-amazon-borderGray p-6">
+                  <h2 className="text-lg font-black text-amazon-text pb-4 border-b border-amazon-borderGray mb-6">
+                    Product Attributes
+                    {loadingAttributes && <span className="ml-2 text-sm text-amazon-mutedText font-normal animate-pulse">Loading...</span>}
+                  </h2>
+                  {!loadingAttributes && attributes.length === 0 ? (
+                    <div className="text-center py-8">
+                      <AlertCircle size={32} className="mx-auto text-amazon-mutedText mb-2 opacity-50" />
+                      <p className="text-sm text-amazon-mutedText">No attributes configured for this category</p>
                     </div>
-
-                    {/* SKU Images */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase text-gray-400 ml-1">SKU Images (Max 3)</label>
-                      <div className="grid grid-cols-3 gap-4">
-                        {sku.images.map((img, i) => (
-                          <div key={i} className="relative aspect-square rounded-xl bg-white border-2 border-dashed border-gray-200 hover:border-blue-400 transition-all overflow-hidden flex items-center justify-center group">
-                            {img ? (
-                              <>
-                                <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" alt="" />
-                                <button 
-                                  onClick={() => updateSKUImage(index, i, null)} 
-                                  className="absolute top-1 right-1 p-1 bg-white/90 rounded-full text-red-500 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  <X size={12}/>
-                                </button>
-                              </>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {attributes
+                        .filter((a) => a.slug !== "color" && a.slug !== "size")
+                        .map((a) => (
+                          <div key={a.slug}>
+                            <label className="block text-sm font-bold text-amazon-text mb-2">
+                              {a.name}
+                              {a.isFilterable && <span className="text-amazon-danger ml-1">*</span>}
+                            </label>
+                            {a.type === "BOOLEAN" ? (
+                              <select
+                                value={attributeValues[a.slug] || ""}
+                                onChange={(e) => setAttributeValues((v) => ({ ...v, [a.slug]: e.target.value }))}
+                                className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 bg-white transition-all font-bold"
+                              >
+                                <option value="">Select...</option>
+                                <option value="true">Yes</option>
+                                <option value="false">No</option>
+                              </select>
                             ) : (
-                              <label className="cursor-pointer p-4 flex flex-col items-center gap-1 w-full h-full justify-center">
-                                <Upload size={16} className="text-gray-400" />
-                                <span className="text-[9px] text-gray-400 font-bold">Upload</span>
-                                <input 
-                                  type="file" 
-                                  className="hidden" 
-                                  accept="image/*"
-                                  onChange={e => updateSKUImage(index, i, e.target.files?.[0] || null)} 
-                                />
-                              </label>
+                              <input
+                                type={a.type === "NUMBER" ? "number" : "text"}
+                                value={attributeValues[a.slug] || ""}
+                                onChange={(e) => setAttributeValues((v) => ({ ...v, [a.slug]: e.target.value }))}
+                                placeholder={`Enter ${a.name.toLowerCase()}`}
+                                className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 transition-all font-bold"
+                              />
                             )}
                           </div>
                         ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Color Variants */}
+              <div className="bg-white rounded-xl shadow-sm border border-amazon-borderGray p-6">
+                <div className="flex justify-between items-center pb-4 border-b border-amazon-borderGray mb-6">
+                  <div>
+                    <h2 className="text-lg font-black text-amazon-text">Colors & Sizes</h2>
+                    <p className="text-sm text-amazon-mutedText mt-0.5">Add one card per color with size matrix</p>
+                  </div>
+                  <button
+                    onClick={addVariant}
+                    className="flex items-center gap-2 px-4 py-2 bg-amazon-orange hover:bg-amazon-orangeHover text-white rounded-lg font-bold text-sm transition-colors shadow-sm"
+                  >
+                    <Plus size={16} />
+                    Add Color
+                  </button>
+                </div>
+
+                <div className="space-y-5">
+                  {variants.map((v, vi) => (
+                    <div key={vi} className="border-2 border-amazon-borderGray rounded-xl overflow-hidden hover:border-amazon-orange transition-colors">
+                      <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b-2 border-amazon-borderGray">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className="w-6 h-6 rounded-full border-2 border-amazon-borderGray shadow-sm"
+                            style={{ backgroundColor: v.color ? v.color.toLowerCase() : "#f3f4f6" }}
+                          />
+                          <select
+                            value={v.color}
+                            onChange={(e) => setVariantColor(vi, e.target.value)}
+                            className="px-3 py-2 border-2 border-amazon-borderGray rounded-lg bg-white font-bold text-sm focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 transition-all"
+                          >
+                            <option value="">Select Color *</option>
+                            {COLORS.map((c) => (
+                              <option key={c} value={c} disabled={usedColors.includes(c) && v.color !== c}>
+                                {c}{usedColors.includes(c) && v.color !== c ? " (used)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {variants.length > 1 && (
+                          <button
+                            onClick={() => removeVariant(vi)}
+                            className="flex items-center gap-1.5 text-amazon-danger hover:bg-red-50 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors"
+                          >
+                            <Trash2 size={14} />
+                            Remove
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="p-5 space-y-5">
+                        {/* Size matrix */}
+                        <div>
+                          <div className="flex items-center justify-between mb-3">
+                            <label className="text-sm font-black text-amazon-text">Available Sizes</label>
+                            <button
+                              onClick={() => enableAllSizes(vi)}
+                              className="text-xs text-amazon-orange hover:underline font-bold"
+                            >
+                              Enable all
+                            </button>
+                          </div>
+
+                          <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                            {v.sizes.map((s, si) => (
+                              <div
+                                key={s.size}
+                                className={`grid grid-cols-[auto_1fr_1fr_1fr] gap-3 items-center px-3 py-2.5 rounded-lg transition-all ${
+                                  s.enabled
+                                    ? "bg-white border-2 border-amazon-orange shadow-sm"
+                                    : "bg-white border-2 border-transparent hover:border-amazon-borderGray"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={s.enabled}
+                                  onChange={() => toggleSize(vi, si)}
+                                  className="w-5 h-5 text-amazon-orange border-2 border-amazon-borderGray rounded focus:ring-amazon-orange cursor-pointer"
+                                />
+                                <span className={`text-sm font-black ${s.enabled ? "text-amazon-text" : "text-amazon-mutedText"}`}>
+                                  {s.size}
+                                </span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  disabled={!s.enabled}
+                                  value={s.enabled ? s.stock : ""}
+                                  onChange={(e) => setSizeField(vi, si, "stock", e.target.value)}
+                                  placeholder="Stock"
+                                  className={`px-3 py-2 border-2 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amazon-orange/20 ${
+                                    s.enabled
+                                      ? "border-amazon-borderGray bg-white focus:border-amazon-orange"
+                                      : "border-transparent bg-transparent cursor-not-allowed"
+                                  }`}
+                                />
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  disabled={!s.enabled}
+                                  value={s.enabled ? s.price : ""}
+                                  onChange={(e) => setSizeField(vi, si, "price", e.target.value)}
+                                  placeholder="₹ Override"
+                                  className={`px-3 py-2 border-2 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amazon-orange/20 ${
+                                    s.enabled
+                                      ? "border-amazon-borderGray bg-white focus:border-amazon-orange"
+                                      : "border-transparent bg-transparent cursor-not-allowed"
+                                  }`}
+                                />
+                              </div>
+                            ))}
+                          </div>
+
+                          {v.sizes.some((s) => s.enabled) && (
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {v.sizes.filter((s) => s.enabled).map((s) => (
+                                <span
+                                  key={s.size}
+                                  className="inline-flex items-center gap-1.5 text-xs bg-orange-50 text-amazon-orange border border-orange-200 px-3 py-1 rounded-full font-black"
+                                >
+                                  <CheckCircle size={12} />
+                                  {s.size} · {s.stock} pcs{s.price && ` · ₹${s.price}`}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Variant images */}
+                        <div>
+                          <label className="block text-sm font-black text-amazon-text mb-3">
+                            Images for {v.color || "this color"} (Optional)
+                          </label>
+                          <div className="grid grid-cols-3 gap-3">
+                            {v.images.map((img, ii) => (
+                              <label key={ii} className="block cursor-pointer group">
+                                <div className="border-2 border-dashed border-amazon-borderGray rounded-xl group-hover:border-amazon-orange transition-all bg-white h-32 flex items-center justify-center relative overflow-hidden">
+                                  {img ? (
+                                    <>
+                                      <img src={preview(img)!} alt="" className="w-full h-full object-cover" />
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.preventDefault(); setVariantImg(vi, ii, null); }}
+                                        className="absolute top-2 right-2 bg-amazon-danger text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <div className="text-center">
+                                      <Upload size={20} className="mx-auto text-amazon-mutedText mb-1" />
+                                      <span className="text-xs text-amazon-mutedText font-bold">Image {ii + 1}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => setVariantImg(vi, ii, e.target.files?.[0] || null)}
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+
+                {/* SKU Preview */}
+                {flattenSkus().some((s) => s.color) && (
+                  <div className="mt-5 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Package size={16} className="text-blue-600" />
+                      <p className="text-xs font-black text-blue-800 uppercase tracking-wide">
+                        {flattenSkus().filter((s) => s.color).length} SKUs will be created
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {flattenSkus().filter((s) => s.color).map((s, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1.5 text-xs bg-blue-100 text-blue-700 border border-blue-300 px-3 py-1 rounded-full font-bold"
+                        >
+                          {s.color}{s.size ? ` / ${s.size}` : ""} · {s.stock} pcs
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
               </div>
 
-              {/* SKU Summary */}
-              <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-bold text-gray-700">Total SKUs:</span>
-                  <span className="font-black text-blue-600">{skus.filter(s => s.color).length}</span>
+            </div>
+
+            {/* Right Column — Sidebar */}
+            <div className="space-y-6">
+
+              {/* Main Images */}
+              <div className="bg-white rounded-xl shadow-sm border border-amazon-borderGray p-6 sticky top-6">
+                <div className="flex items-center gap-3 pb-4 border-b border-amazon-borderGray mb-5">
+                  <Upload size={18} className="text-amazon-orange" />
+                  <h2 className="text-lg font-black text-amazon-text">Product Gallery</h2>
                 </div>
-                <div className="flex items-center justify-between text-sm mt-2">
-                  <span className="font-bold text-gray-700">Total Stock:</span>
-                  <span className="font-black text-blue-600">
-                    {skus.reduce((sum, s) => sum + (Number(s.stock) || 0), 0)}
-                  </span>
+                <p className="text-xs text-amazon-mutedText mb-4">Upload up to 4 images. First = main display.</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {mainImages.map((img, i) => (
+                    <label key={i} className="block cursor-pointer group">
+                      <div className="border-2 border-dashed border-amazon-borderGray rounded-xl group-hover:border-amazon-orange transition-all bg-amazon-lightGray h-32 flex items-center justify-center relative overflow-hidden">
+                        {img ? (
+                          <>
+                            <img src={preview(img)!} alt="" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); setMainImg(i, null); }}
+                              className="absolute top-2 right-2 bg-amazon-danger text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+                            >
+                              <X size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <div className="text-center">
+                            <Upload size={18} className="mx-auto text-amazon-mutedText mb-1" />
+                            <span className="text-[10px] text-amazon-mutedText font-bold">{i === 0 ? "Main" : `#${i + 1}`}</span>
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => setMainImg(i, e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  ))}
                 </div>
               </div>
+
+              {/* Discount */}
+              <div className="bg-white rounded-xl shadow-sm border border-amazon-borderGray p-6">
+                <div className="flex items-center gap-3 pb-4 border-b border-amazon-borderGray mb-5">
+                  <TrendingDown size={18} className="text-green-600" />
+                  <h2 className="text-lg font-black text-amazon-text">Discount</h2>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-bold text-amazon-text mb-2">Type</label>
+                    <select
+                      value={discountType}
+                      onChange={(e) => setDiscountType(e.target.value as any)}
+                      className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 bg-white font-bold"
+                    >
+                      <option value="">No Discount</option>
+                      <option value="PERCENT">Percentage (%)</option>
+                      <option value="FLAT">Fixed Amount (₹)</option>
+                    </select>
+                  </div>
+                  {discountType && (
+                    <div>
+                      <label className="block text-sm font-bold text-amazon-text mb-2">Value</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={discountValue}
+                        onChange={(e) => setDiscountValue(e.target.value)}
+                        placeholder={discountType === "PERCENT" ? "0–100" : "Amount"}
+                        className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 font-bold"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={submit}
+                  className="w-full px-6 py-4 bg-amazon-orange hover:bg-amazon-orangeHover text-white rounded-xl font-black text-base shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <Package size={20} />
+                  Create Product
+                </button>
+                <button
+                  onClick={() => router.push("/products")}
+                  className="w-full px-6 py-3 border-2 border-amazon-borderGray bg-white hover:bg-gray-50 text-amazon-text rounded-xl font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+
             </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-8">
-            {/* Pricing */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-              <div className="flex items-center gap-3 pb-4 border-b">
-                <div className="p-2 bg-green-50 text-green-600 rounded-lg"><IndianRupee size={20}/></div>
-                <h2 className="text-lg font-black text-gray-800">Pricing</h2>
+        </div>
+      </div>
+
+      {/* Pricing Modal */}
+      {pricingModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 bg-amazon-darkBlue border-b border-amazon-borderGray">
+              <div className="flex items-center gap-3">
+                <Calculator size={20} className="text-amazon-orange" />
+                <h3 className="text-lg font-black text-white">Pricing Breakdown</h3>
               </div>
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-black uppercase text-gray-400">
-                    Base Price <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <IndianRupee className="absolute left-3 top-4 text-gray-400" size={16} />
-                    <input 
-                      type="number" 
-                      min="0"
-                      value={basePrice} 
-                      onChange={e => setBasePrice(e.target.value)} 
-                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-xl font-bold outline-none focus:border-green-500 transition-all" 
-                      placeholder="0.00" 
-                    />
-                  </div>
-                  <p className="text-[10px] text-gray-500 ml-1">SKUs without specific price will use this</p>
-                </div>
-                
-                <div className="space-y-1">
-                  <label className="text-xs font-black uppercase text-gray-400">Discount</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <select 
-                      value={discountType} 
-                      onChange={e => setDiscountType(e.target.value as any)} 
-                      className="p-3 bg-gray-50 border-2 border-gray-50 rounded-xl font-bold outline-none focus:border-green-500"
-                    >
-                      <option value="">None</option>
-                      <option value="PERCENT">% Off</option>
-                      <option value="FLAT">₹ Flat</option>
-                    </select>
-                    <input 
-                      type="number" 
-                      min="0"
-                      value={discountValue} 
-                      onChange={e => setDiscountValue(e.target.value)} 
-                      disabled={!discountType} 
-                      className="p-3 bg-gray-50 border-2 border-gray-50 rounded-xl font-bold outline-none disabled:opacity-50 focus:border-green-500" 
-                      placeholder="Value" 
-                    />
-                  </div>
-                </div>
-                
-                <div className="pt-4 space-y-1">
-                  <label className="text-xs font-black uppercase text-gray-400">
-                    Weight <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Scale className="absolute left-3 top-4 text-gray-400" size={16} />
-                    <input 
-                      type="number" 
-                      min="0"
-                      value={weight} 
-                      onChange={e => setWeight(e.target.value)} 
-                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-gray-50 rounded-xl font-bold outline-none focus:border-blue-500 transition-all" 
-                      placeholder="500" 
-                    />
-                  </div>
-                  <p className="text-[10px] text-gray-500 ml-1">In grams</p>
-                </div>
-              </div>
+              <button
+                onClick={() => setPricingModalOpen(false)}
+                className="text-white hover:bg-white/10 p-2 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
             </div>
 
-            {/* Main Images */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-6">
-              <div className="flex items-center gap-3 pb-4 border-b">
-                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><Upload size={20}/></div>
-                <h2 className="text-lg font-black text-gray-800">Main Images</h2>
+            <div className="p-6 space-y-4">
+              {/* MRP */}
+              <div className="flex justify-between items-center pb-3 border-b border-amazon-borderGray">
+                <span className="text-sm font-bold text-amazon-mutedText">MRP</span>
+                <span className="text-xl font-black text-amazon-text">₹{mrp.toLocaleString()}</span>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                {mainImages.map((img, i) => (
-                  <div key={i} className="relative aspect-square rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 hover:border-blue-400 transition-all flex items-center justify-center overflow-hidden group">
-                    {img ? (
-                      <>
-                        <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" alt="" />
-                        <button 
-                          onClick={() => {
-                            const copy = [...mainImages];
-                            copy[i] = null;
-                            setMainImages(copy);
-                          }}
-                          className="absolute top-2 right-2 p-1 bg-white rounded-full text-red-500 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X size={14}/>
-                        </button>
-                      </>
-                    ) : (
-                      <label className="cursor-pointer text-center p-4 w-full h-full flex flex-col items-center justify-center">
-                        <Plus size={24} className="text-gray-300 mb-1" />
-                        <span className="text-[10px] font-black uppercase text-gray-400">
-                          Slot {i + 1}{i === 0 && " *"}
-                        </span>
-                        <input 
-                          type="file" 
-                          className="hidden" 
-                          accept="image/*"
-                          onChange={e => {
-                            const copy = [...mainImages];
-                            copy[i] = e.target.files?.[0] || null;
-                            setMainImages(copy);
-                          }} 
-                        />
-                      </label>
-                    )}
+
+              {/* Discounted Price */}
+              {discountType && dValue > 0 && (
+                <div className="flex justify-between items-center pb-3 border-b border-amazon-borderGray">
+                  <div className="flex items-center gap-2">
+                    <TrendingDown size={14} className="text-green-600" />
+                    <span className="text-sm font-bold text-green-600">After Discount</span>
                   </div>
-                ))}
+                  <span className="text-xl font-black text-green-600">₹{discountedPrice.toLocaleString()}</span>
+                </div>
+              )}
+
+              {/* Deductions */}
+              <div className="space-y-2 bg-gray-50 rounded-lg p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-amazon-mutedText mb-3">Deductions</p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-amazon-mutedText">Platform Fee (10%)</span>
+                  <span className="font-bold text-amazon-danger">-₹{platformFee.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <div className="flex items-center gap-1">
+                    <Truck size={12} className="text-amazon-mutedText" />
+                    <span className="text-amazon-mutedText">Est. Shipping</span>
+                  </div>
+                  <span className="font-bold text-amazon-danger">-₹{shippingEstimate}</span>
+                </div>
               </div>
-              <p className="text-[10px] text-gray-500 text-center">First image is required</p>
+
+              {/* Net Profit */}
+              <div className="flex justify-between items-center pt-3 border-t-2 border-amazon-borderGray">
+                <span className="text-sm font-black text-amazon-text uppercase tracking-wide">Your Net Earnings</span>
+                <span className={`text-2xl font-black ${netProfit < 0 ? "text-amazon-danger" : "text-amazon-success"}`}>
+                  ₹{netProfit.toFixed(2)}
+                </span>
+              </div>
+
+              {netProfit < 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                  <AlertCircle size={16} className="text-amazon-danger shrink-0 mt-0.5" />
+                  <p className="text-xs text-amazon-danger font-bold">
+                    Your net profit is negative. Consider increasing the price or reducing the discount.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      )}
+
     </SellerLayout>
   );
 }
