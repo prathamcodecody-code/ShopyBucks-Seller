@@ -108,8 +108,9 @@ export default function SellerAuthPage() {
         <div className="relative z-10">
           <Link href="/" className="inline-block mb-12">
              <div className="flex items-center text-3xl font-black uppercase tracking-tighter">
-                <span className="text-white">Shopy</span>
-                <span className="text-amazon-orange italic ml-0.5">Bucks</span>
+                <div className="relative w-32 md:w-44 transition-transform group-hover:scale-105 duration-300">
+                  <img src="/shopybucks.jpg" alt="ShopyBucks Logo" className="w-full h-auto object-contain" />
+                </div>
              </div>
           </Link>
           
@@ -150,8 +151,9 @@ export default function SellerAuthPage() {
         {/* Mobile Header */}
         <div className="lg:hidden mb-12 text-center">
             <div className="flex items-center text-2xl font-black uppercase tracking-tighter mb-2">
-                <span className="text-[#4F1271]">Shopy</span>
-                <span className="text-amazon-orange italic ml-0.5">Bucks</span>
+                <div className="relative w-32 md:w-44 transition-transform group-hover:scale-105 duration-300">
+                  <img src="/shopybucks.jpg" alt="ShopyBucks Logo" className="w-full h-auto object-contain" />
+                </div>
             </div>
             <p className="text-xs font-black uppercase tracking-widest text-amazon-mutedText">Seller Central</p>
         </div>
