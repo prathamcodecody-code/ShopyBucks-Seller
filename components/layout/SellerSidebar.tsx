@@ -102,8 +102,9 @@ export default function SellerSidebar() {
           </button>
 
           <div className="flex flex-col">
-            <span className="text-3xl font-black text-[#4F1271] uppercase tracking-tighter leading-none">Shopy</span>
-            <span className="text-3xl font-black text-amazon-orange italic uppercase tracking-tighter leading-none">Bucks</span>
+            <div className="relative w-32 md:w-44 transition-transform group-hover:scale-105 duration-300">
+                  <img src="/shopybucks.jpg" alt="ShopyBucks Logo" className="w-full h-auto object-contain" />
+                </div>
             <div className="mt-1 flex items-center gap-2 text-[10px] font-bold bg-amazon-darkBlue text-white px-2 py-0.5 rounded-full w-fit uppercase tracking-widest">
               <Store size={10} />
               Seller Central
