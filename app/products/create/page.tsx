@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import SellerLayout from "@/components/layout/SellerLayout";
 import { api } from "@/lib/api";
@@ -17,6 +17,7 @@ import {
   Calculator,
   CheckCircle,
   AlertCircle,
+  Ruler,
 } from "lucide-react";
 
 /* -------------------------------- TYPES -------------------------------- */
@@ -42,6 +43,8 @@ type Attribute = {
   isFilterable: boolean;
 };
 
+type SizeMode = "NONE" | "CLOTHING" | "SHOES" | "NUMERIC";
+
 /* ------------------------------- CONSTANTS ------------------------------ */
 
 const COLORS = [
@@ -50,15 +53,104 @@ const COLORS = [
   "Beige", "Maroon", "Teal", "Lime", "Coral", "Mint",
 ];
 
-const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "3XL", "4XL"];
+const CLOTHING_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "3XL", "4XL"];
 
-function freshSizeRows(): SizeRow[] {
-  return SIZES.map((size) => ({ size, enabled: false, stock: 0, price: "" }));
+const SHOE_SIZES = ["4", "5", "6", "7", "8", "9", "10", "11", "12", "13"];
+
+/* 
+  Size Mode Detection — keyword based on category / type / subtype names
+  We match against lowercased name strings. 
+  Priority: SHOES > CLOTHING > NONE
+*/
+
+const SHOE_KEYWORDS = [
+  "shoe", "shoes", "sneaker", "sneakers", "boot", "boots",
+  "sandal", "sandals", "slipper", "slippers", "footwear",
+  "loafer", "loafers", "heel", "heels", "moccasin", "moccasins",
+  "flip flop", "flipflop", "clog", "clogs", "oxford",
+];
+
+const CLOTHING_KEYWORDS = [
+  "shirt", "t-shirt", "tshirt", "top", "tops", "blouse", "kurti", "kurta",
+  "dress", "dresses", "jeans", "pant", "pants", "trouser", "trousers",
+  "skirt", "skirts", "legging", "leggings", "jacket", "jackets", "coat",
+  "coats", "hoodie", "hoodies", "sweater", "sweaters", "sweatshirt",
+  "pullover", "suit", "suits", "blazer", "blazers", "saree", "sari",
+  "salwar", "lehenga", "shorts", "dungaree", "jumpsuit", "romper",
+  "clothing", "clothes", "apparel", "garment", "wear", "outfit",
+  "ethnic", "western", "formal", "casual", "sportswear", "activewear",
+  "innerwear", "underwear", "lingerie", "nightwear", "sleepwear",
+];
+
+const NO_SIZE_KEYWORDS = [
+  "beauty", "skincare", "makeup", "cosmetic", "cosmetics", "lipstick",
+  "lipgloss", "foundation", "mascara", "eyeshadow", "blush", "concealer",
+  "serum", "moisturizer", "moisturiser", "toner", "sunscreen", "spf",
+  "face wash", "facewash", "cleanser", "scrub", "mask", "perfume",
+  "fragrance", "deodorant", "cologne", "body lotion", "body wash",
+  "shampoo", "conditioner", "hair oil", "hair color", "hair colour",
+  "nail", "nails", "nail polish", "nail art", "jewellery", "jewelry",
+  "necklace", "bracelet", "ring", "earring", "earrings", "pendant",
+  "watch", "watches", "bag", "bags", "handbag", "purse", "wallet",
+  "clutch", "backpack", "luggage", "suitcase", "sunglasses", "glasses",
+  "cap", "hat", "scarf", "stole", "dupatta", "belt", "belts",
+  "supplement", "vitamin", "protein", "nutrition", "health",
+  "electronics", "phone", "mobile", "gadget", "appliance",
+  "book", "books", "stationery", "toy", "toys",
+];
+
+function detectSizeMode(names: string[]): SizeMode {
+  const combined = names.join(" ").toLowerCase();
+
+  // Check no-size first (most specific win)
+  for (const kw of NO_SIZE_KEYWORDS) {
+    if (combined.includes(kw)) return "NONE";
+  }
+  // Then shoes
+  for (const kw of SHOE_KEYWORDS) {
+    if (combined.includes(kw)) return "SHOES";
+  }
+  // Then clothing
+  for (const kw of CLOTHING_KEYWORDS) {
+    if (combined.includes(kw)) return "CLOTHING";
+  }
+
+  // Default: show clothing sizes as a safe fallback for unknown categories
+  return "CLOTHING";
 }
 
-function freshVariant(color = ""): ColorVariant {
-  return { color, images: [null, null, null], sizes: freshSizeRows() };
+function getSizesForMode(mode: SizeMode): string[] {
+  if (mode === "CLOTHING") return CLOTHING_SIZES;
+  if (mode === "SHOES") return SHOE_SIZES;
+  return [];
 }
+
+function freshSizeRows(mode: SizeMode): SizeRow[] {
+  return getSizesForMode(mode).map((size) => ({
+    size,
+    enabled: false,
+    stock: 0,
+    price: "",
+  }));
+}
+
+function freshVariant(color = "", mode: SizeMode = "CLOTHING"): ColorVariant {
+  return { color, images: [null, null, null], sizes: freshSizeRows(mode) };
+}
+
+const SIZE_MODE_LABELS: Record<SizeMode, string> = {
+  NONE: "No sizes required",
+  CLOTHING: "Clothing sizes (XS – 4XL)",
+  SHOES: "Shoe sizes (4 – 13)",
+  NUMERIC: "Numeric sizes",
+};
+
+const SIZE_MODE_COLORS: Record<SizeMode, string> = {
+  NONE: "bg-gray-100 text-gray-600 border-gray-200",
+  CLOTHING: "bg-blue-50 text-blue-700 border-blue-200",
+  SHOES: "bg-amber-50 text-amber-700 border-amber-200",
+  NUMERIC: "bg-purple-50 text-purple-700 border-purple-200",
+};
 
 /* ------------------------------ PAGE ------------------------------------ */
 
@@ -89,9 +181,28 @@ export default function CreateProductPage() {
   const [occasionTags, setOccasionTags] = useState<string[]>([]);
 
   const [mainImages, setMainImages] = useState<(File | null)[]>([null, null, null, null]);
-  const [variants, setVariants] = useState<ColorVariant[]>([freshVariant()]);
+  const [variants, setVariants] = useState<ColorVariant[]>([freshVariant("", "CLOTHING")]);
 
   const [pricingModalOpen, setPricingModalOpen] = useState(false);
+
+  /* ---------------------------- SIZE MODE DETECTION ---------------------------- */
+
+  const sizeMode = useMemo<SizeMode>(() => {
+    const catName = categories.find((c) => String(c.id) === categoryId)?.name || "";
+    const typeName = types.find((t) => String(t.id) === typeId)?.name || "";
+    const subtypeName = subtypes.find((s) => String(s.id) === subtypeId)?.name || "";
+
+    // Only compute if we have at least a category selected
+    if (!categoryId) return "CLOTHING";
+    return detectSizeMode([catName, typeName, subtypeName].filter(Boolean));
+  }, [categoryId, typeId, subtypeId, categories, types, subtypes]);
+
+  // Re-build variant size rows whenever sizeMode changes
+  useEffect(() => {
+    setVariants((prev) =>
+      prev.map((v) => ({ ...v, sizes: freshSizeRows(sizeMode) }))
+    );
+  }, [sizeMode]);
 
   /* ---------------------------- FETCH DATA ---------------------------- */
 
@@ -140,16 +251,15 @@ export default function CreateProductPage() {
     setMainImages((prev) => { const n = [...prev]; n[i] = f; return n; });
   };
 
-  const addVariant = () => setVariants((v) => [...v, freshVariant()]);
+  const addVariant = () =>
+    setVariants((v) => [...v, freshVariant("", sizeMode)]);
 
   const removeVariant = (vi: number) =>
     setVariants((v) => v.filter((_, i) => i !== vi));
 
   const setVariantColor = (vi: number, color: string) =>
     setVariants((v) => {
-      const n = [...v];
-      n[vi] = { ...n[vi], color };
-      return n;
+      const n = [...v]; n[vi] = { ...n[vi], color }; return n;
     });
 
   const setVariantImg = (vi: number, ii: number, f: File | null) =>
@@ -189,21 +299,38 @@ export default function CreateProductPage() {
       return n;
     });
 
+  // For NONE mode: each variant is treated as a single SKU with stock field
+  const [variantStocks, setVariantStocks] = useState<Record<number, number>>({});
+  const setVariantStock = (vi: number, stock: number) =>
+    setVariantStocks((s) => ({ ...s, [vi]: stock }));
+
   function flattenSkus() {
     const result: { color: string; size: string | null; stock: number; price?: number }[] = [];
-    for (const v of variants) {
+
+    for (const [vi, v] of variants.entries()) {
       if (!v.color) continue;
-      const enabledSizes = v.sizes.filter((s) => s.enabled);
-      if (enabledSizes.length === 0) {
-        result.push({ color: v.color, size: null, stock: 0, price: undefined });
+
+      if (sizeMode === "NONE") {
+        // No sizes — single SKU per color
+        result.push({
+          color: v.color,
+          size: null,
+          stock: variantStocks[vi] ?? 1,
+          price: undefined,
+        });
       } else {
-        for (const s of enabledSizes) {
-          result.push({
-            color: v.color,
-            size: s.size,
-            stock: s.stock,
-            price: s.price ? Number(s.price) : undefined,
-          });
+        const enabledSizes = v.sizes.filter((s) => s.enabled);
+        if (enabledSizes.length === 0) {
+          result.push({ color: v.color, size: null, stock: 0, price: undefined });
+        } else {
+          for (const s of enabledSizes) {
+            result.push({
+              color: v.color,
+              size: s.size,
+              stock: s.stock,
+              price: s.price ? Number(s.price) : undefined,
+            });
+          }
         }
       }
     }
@@ -247,7 +374,8 @@ export default function CreateProductPage() {
       alert("Please add at least one color variant");
       return;
     }
-    if (skus.every((s) => !s.size && s.stock === 0)) {
+
+    if (sizeMode !== "NONE" && skus.every((s) => !s.size && s.stock === 0)) {
       alert("Please enable at least one size with stock > 0");
       return;
     }
@@ -275,14 +403,12 @@ export default function CreateProductPage() {
         .filter(([, v]) => v)
         .map(([slug, value]) => ({ slug, value }));
       fd.append("attributes", JSON.stringify(attrs));
-
       fd.append("sizes", JSON.stringify(skus));
 
       let skuIndex = 0;
-      for (const v of variants) {
+      for (const [vi, v] of variants.entries()) {
         if (!v.color) continue;
-        const enabledSizes = v.sizes.filter((s) => s.enabled);
-        const count = enabledSizes.length || 1;
+        const count = sizeMode === "NONE" ? 1 : (v.sizes.filter((s) => s.enabled).length || 1);
         v.images.forEach((img, ii) => {
           if (img) fd.append(`sku_${skuIndex}_img${ii + 1}`, img);
         });
@@ -300,6 +426,15 @@ export default function CreateProductPage() {
   };
 
   const usedColors = variants.map((v) => v.color).filter(Boolean);
+
+  /* ---------------------------- SIZE MODE BADGE ---------------------------- */
+
+  const SizeModeBadge = () => (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${SIZE_MODE_COLORS[sizeMode]}`}>
+      <Ruler size={11} />
+      {SIZE_MODE_LABELS[sizeMode]}
+    </span>
+  );
 
   /* ---------------------------- RENDER ---------------------------- */
 
@@ -334,7 +469,7 @@ export default function CreateProductPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            {/* Left Column — Main content */}
+            {/* Left Column */}
             <div className="lg:col-span-2 space-y-6">
 
               {/* Basic Info */}
@@ -446,6 +581,14 @@ export default function CreateProductPage() {
                     </select>
                   </div>
                 </div>
+
+                {/* Size mode indicator — shown after category is selected */}
+                {categoryId && (
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="text-xs text-amazon-mutedText font-bold">Size type detected:</span>
+                    <SizeModeBadge />
+                  </div>
+                )}
               </div>
 
               {/* Attributes */}
@@ -453,7 +596,9 @@ export default function CreateProductPage() {
                 <div className="bg-white rounded-xl shadow-sm border border-amazon-borderGray p-6">
                   <h2 className="text-lg font-black text-amazon-text pb-4 border-b border-amazon-borderGray mb-6">
                     Product Attributes
-                    {loadingAttributes && <span className="ml-2 text-sm text-amazon-mutedText font-normal animate-pulse">Loading...</span>}
+                    {loadingAttributes && (
+                      <span className="ml-2 text-sm text-amazon-mutedText font-normal animate-pulse">Loading...</span>
+                    )}
                   </h2>
                   {!loadingAttributes && attributes.length === 0 ? (
                     <div className="text-center py-8">
@@ -500,8 +645,12 @@ export default function CreateProductPage() {
               <div className="bg-white rounded-xl shadow-sm border border-amazon-borderGray p-6">
                 <div className="flex justify-between items-center pb-4 border-b border-amazon-borderGray mb-6">
                   <div>
-                    <h2 className="text-lg font-black text-amazon-text">Colors & Sizes</h2>
-                    <p className="text-sm text-amazon-mutedText mt-0.5">Add one card per color with size matrix</p>
+                    <h2 className="text-lg font-black text-amazon-text">Colors & Variants</h2>
+                    <p className="text-sm text-amazon-mutedText mt-0.5">
+                      {sizeMode === "NONE"
+                        ? "Add one card per color — no sizes needed for this category"
+                        : `Add one card per color with ${sizeMode === "SHOES" ? "shoe" : "clothing"} size matrix`}
+                    </p>
                   </div>
                   <button
                     onClick={addVariant}
@@ -514,7 +663,11 @@ export default function CreateProductPage() {
 
                 <div className="space-y-5">
                   {variants.map((v, vi) => (
-                    <div key={vi} className="border-2 border-amazon-borderGray rounded-xl overflow-hidden hover:border-amazon-orange transition-colors">
+                    <div
+                      key={vi}
+                      className="border-2 border-amazon-borderGray rounded-xl overflow-hidden hover:border-amazon-orange transition-colors"
+                    >
+                      {/* Variant header */}
                       <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b-2 border-amazon-borderGray">
                         <div className="flex items-center gap-3">
                           <span
@@ -546,81 +699,117 @@ export default function CreateProductPage() {
                       </div>
 
                       <div className="p-5 space-y-5">
-                        {/* Size matrix */}
-                        <div>
-                          <div className="flex items-center justify-between mb-3">
-                            <label className="text-sm font-black text-amazon-text">Available Sizes</label>
-                            <button
-                              onClick={() => enableAllSizes(vi)}
-                              className="text-xs text-amazon-orange hover:underline font-bold"
-                            >
-                              Enable all
-                            </button>
-                          </div>
 
-                          <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-                            {v.sizes.map((s, si) => (
-                              <div
-                                key={s.size}
-                                className={`grid grid-cols-[auto_1fr_1fr_1fr] gap-3 items-center px-3 py-2.5 rounded-lg transition-all ${
-                                  s.enabled
-                                    ? "bg-white border-2 border-amazon-orange shadow-sm"
-                                    : "bg-white border-2 border-transparent hover:border-amazon-borderGray"
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={s.enabled}
-                                  onChange={() => toggleSize(vi, si)}
-                                  className="w-5 h-5 text-amazon-orange border-2 border-amazon-borderGray rounded focus:ring-amazon-orange cursor-pointer"
-                                />
-                                <span className={`text-sm font-black ${s.enabled ? "text-amazon-text" : "text-amazon-mutedText"}`}>
-                                  {s.size}
-                                </span>
+                        {/* ===== SIZE SECTION — conditional ===== */}
+                        {sizeMode === "NONE" ? (
+                          /* No sizes — just stock quantity */
+                          <div>
+                            <label className="block text-sm font-black text-amazon-text mb-3">
+                              Stock Quantity
+                            </label>
+                            <div className="flex items-center gap-4 bg-gray-50 rounded-lg px-4 py-3 border-2 border-amazon-borderGray">
+                              <Package size={16} className="text-amazon-mutedText shrink-0" />
+                              <div className="flex-1">
+                                <p className="text-xs text-amazon-mutedText mb-1 font-bold">
+                                  How many units do you have in stock?
+                                </p>
                                 <input
                                   type="number"
-                                  min={0}
-                                  disabled={!s.enabled}
-                                  value={s.enabled ? s.stock : ""}
-                                  onChange={(e) => setSizeField(vi, si, "stock", e.target.value)}
-                                  placeholder="Stock"
-                                  className={`px-3 py-2 border-2 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amazon-orange/20 ${
-                                    s.enabled
-                                      ? "border-amazon-borderGray bg-white focus:border-amazon-orange"
-                                      : "border-transparent bg-transparent cursor-not-allowed"
-                                  }`}
-                                />
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  disabled={!s.enabled}
-                                  value={s.enabled ? s.price : ""}
-                                  onChange={(e) => setSizeField(vi, si, "price", e.target.value)}
-                                  placeholder="₹ Override"
-                                  className={`px-3 py-2 border-2 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amazon-orange/20 ${
-                                    s.enabled
-                                      ? "border-amazon-borderGray bg-white focus:border-amazon-orange"
-                                      : "border-transparent bg-transparent cursor-not-allowed"
-                                  }`}
+                                  min={1}
+                                  value={variantStocks[vi] ?? 1}
+                                  onChange={(e) => setVariantStock(vi, Number(e.target.value))}
+                                  className="w-full px-3 py-2 border-2 border-amazon-borderGray rounded-lg text-sm font-bold focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 bg-white"
+                                  placeholder="e.g. 50"
                                 />
                               </div>
-                            ))}
+                              <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 border border-gray-200 px-3 py-1.5 rounded-full font-bold whitespace-nowrap">
+                                <CheckCircle size={12} />
+                                No sizes needed
+                              </span>
+                            </div>
                           </div>
-
-                          {v.sizes.some((s) => s.enabled) && (
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {v.sizes.filter((s) => s.enabled).map((s) => (
-                                <span
-                                  key={s.size}
-                                  className="inline-flex items-center gap-1.5 text-xs bg-orange-50 text-amazon-orange border border-orange-200 px-3 py-1 rounded-full font-black"
+                        ) : (
+                          /* Clothing or Shoes — size matrix */
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <label className="text-sm font-black text-amazon-text">
+                                {sizeMode === "SHOES" ? "Shoe Sizes" : "Available Sizes"}
+                              </label>
+                              <div className="flex items-center gap-3">
+                                <SizeModeBadge />
+                                <button
+                                  onClick={() => enableAllSizes(vi)}
+                                  className="text-xs text-amazon-orange hover:underline font-bold"
                                 >
-                                  <CheckCircle size={12} />
-                                  {s.size} · {s.stock} pcs{s.price && ` · ₹${s.price}`}
-                                </span>
+                                  Enable all
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                              {v.sizes.map((s, si) => (
+                                <div
+                                  key={s.size}
+                                  className={`grid grid-cols-[auto_1fr_1fr_1fr] gap-3 items-center px-3 py-2.5 rounded-lg transition-all ${
+                                    s.enabled
+                                      ? "bg-white border-2 border-amazon-orange shadow-sm"
+                                      : "bg-white border-2 border-transparent hover:border-amazon-borderGray"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={s.enabled}
+                                    onChange={() => toggleSize(vi, si)}
+                                    className="w-5 h-5 text-amazon-orange border-2 border-amazon-borderGray rounded focus:ring-amazon-orange cursor-pointer"
+                                  />
+                                  <span className={`text-sm font-black ${s.enabled ? "text-amazon-text" : "text-amazon-mutedText"}`}>
+                                    {s.size}
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    disabled={!s.enabled}
+                                    value={s.enabled ? s.stock : ""}
+                                    onChange={(e) => setSizeField(vi, si, "stock", e.target.value)}
+                                    placeholder="Stock"
+                                    className={`px-3 py-2 border-2 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amazon-orange/20 ${
+                                      s.enabled
+                                        ? "border-amazon-borderGray bg-white focus:border-amazon-orange"
+                                        : "border-transparent bg-transparent cursor-not-allowed"
+                                    }`}
+                                  />
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    disabled={!s.enabled}
+                                    value={s.enabled ? s.price : ""}
+                                    onChange={(e) => setSizeField(vi, si, "price", e.target.value)}
+                                    placeholder="₹ Override"
+                                    className={`px-3 py-2 border-2 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amazon-orange/20 ${
+                                      s.enabled
+                                        ? "border-amazon-borderGray bg-white focus:border-amazon-orange"
+                                        : "border-transparent bg-transparent cursor-not-allowed"
+                                    }`}
+                                  />
+                                </div>
                               ))}
                             </div>
-                          )}
-                        </div>
+
+                            {v.sizes.some((s) => s.enabled) && (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {v.sizes.filter((s) => s.enabled).map((s) => (
+                                  <span
+                                    key={s.size}
+                                    className="inline-flex items-center gap-1.5 text-xs bg-orange-50 text-amazon-orange border border-orange-200 px-3 py-1 rounded-full font-black"
+                                  >
+                                    <CheckCircle size={12} />
+                                    {s.size} · {s.stock} pcs{s.price && ` · ₹${s.price}`}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Variant images */}
                         <div>
@@ -808,13 +997,11 @@ export default function CreateProductPage() {
             </div>
 
             <div className="p-6 space-y-4">
-              {/* MRP */}
               <div className="flex justify-between items-center pb-3 border-b border-amazon-borderGray">
                 <span className="text-sm font-bold text-amazon-mutedText">MRP</span>
                 <span className="text-xl font-black text-amazon-text">₹{mrp.toLocaleString()}</span>
               </div>
 
-              {/* Discounted Price */}
               {discountType && dValue > 0 && (
                 <div className="flex justify-between items-center pb-3 border-b border-amazon-borderGray">
                   <div className="flex items-center gap-2">
@@ -825,7 +1012,6 @@ export default function CreateProductPage() {
                 </div>
               )}
 
-              {/* Deductions */}
               <div className="space-y-2 bg-gray-50 rounded-lg p-4">
                 <p className="text-xs font-black uppercase tracking-wide text-amazon-mutedText mb-3">Deductions</p>
                 <div className="flex justify-between text-sm">
@@ -841,7 +1027,6 @@ export default function CreateProductPage() {
                 </div>
               </div>
 
-              {/* Net Profit */}
               <div className="flex justify-between items-center pt-3 border-t-2 border-amazon-borderGray">
                 <span className="text-sm font-black text-amazon-text uppercase tracking-wide">Your Net Earnings</span>
                 <span className={`text-2xl font-black ${netProfit < 0 ? "text-amazon-danger" : "text-amazon-success"}`}>
