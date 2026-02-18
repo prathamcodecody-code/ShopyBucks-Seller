@@ -63,59 +63,122 @@ const SHOE_SIZES = ["4", "5", "6", "7", "8", "9", "10", "11", "12", "13"];
   Priority: SHOES > CLOTHING > NONE
 */
 
+// SHOES — highest priority, checked FIRST
 const SHOE_KEYWORDS = [
-  "shoe", "shoes", "sneaker", "sneakers", "boot", "boots",
-  "sandal", "sandals", "slipper", "slippers", "footwear",
-  "loafer", "loafers", "heel", "heels", "moccasin", "moccasins",
-  "flip flop", "flipflop", "clog", "clogs", "oxford",
+  "shoe", "shoes",
+  "sneaker", "sneakers",
+  "boot", "boots",
+  "sandal", "sandals",
+  "slipper", "slippers",
+  "loafer", "loafers",
+  "heel", "heels",
+  "moccasin", "moccasins",
+  "flip flop", "flipflop", "flip-flop",
+  "clog", "clogs",
+  "oxford", "oxfords",
+  "derby", "espadrille",
+  "mojari", "kolhapuri",
+  "stiletto", "wedge",
+  "men shoe", "women shoe", "kids shoe",
+  "men footwear", "women footwear", "kids footwear",
+  "casual shoe", "formal shoe", "sports shoe", "running shoe",
 ];
 
+// CLOTHING — checked SECOND
+// Removed "casual", "formal", "wear", "outfit" — too generic
 const CLOTHING_KEYWORDS = [
-  "shirt", "t-shirt", "tshirt", "top", "tops", "blouse", "kurti", "kurta",
-  "dress", "dresses", "jeans", "pant", "pants", "trouser", "trousers",
-  "skirt", "skirts", "legging", "leggings", "jacket", "jackets", "coat",
-  "coats", "hoodie", "hoodies", "sweater", "sweaters", "sweatshirt",
-  "pullover", "suit", "suits", "blazer", "blazers", "saree", "sari",
-  "salwar", "lehenga", "shorts", "dungaree", "jumpsuit", "romper",
-  "clothing", "clothes", "apparel", "garment", "wear", "outfit",
-  "ethnic", "western", "formal", "casual", "sportswear", "activewear",
-  "innerwear", "underwear", "lingerie", "nightwear", "sleepwear",
+  "shirt", "t-shirt", "tshirt",
+  "top", "tops", "blouse",
+  "kurti", "kurta",
+  "dress", "dresses",
+  "jeans", "pant", "pants", "trouser", "trousers",
+  "skirt", "skirts",
+  "legging", "leggings",
+  "jacket", "jackets",
+  "coat", "coats",
+  "hoodie", "hoodies",
+  "sweater", "sweaters", "sweatshirt",
+  "pullover",
+  "suit", "suits", "blazer", "blazers",
+  "saree", "sari",
+  "salwar", "lehenga",
+  "shorts", "dungaree", "jumpsuit", "romper",
+  "clothing", "clothes", "apparel", "garment",
+  "ethnic wear", "western wear",
+  "sportswear", "activewear",
+  "innerwear", "underwear", "lingerie",
+  "nightwear", "sleepwear",
 ];
 
+// NO-SIZE — checked LAST
+// Removed "bag"/"bags" standalone (conflicts with "Bags & Footwear")
+// Removed "nail" standalone, "clutch" standalone — too generic
 const NO_SIZE_KEYWORDS = [
-  "beauty", "skincare", "makeup", "cosmetic", "cosmetics", "lipstick",
-  "lipgloss", "foundation", "mascara", "eyeshadow", "blush", "concealer",
-  "serum", "moisturizer", "moisturiser", "toner", "sunscreen", "spf",
-  "face wash", "facewash", "cleanser", "scrub", "mask", "perfume",
-  "fragrance", "deodorant", "cologne", "body lotion", "body wash",
+  "beauty", "skincare", "makeup",
+  "cosmetic", "cosmetics",
+  "lipstick", "lipgloss", "foundation", "mascara",
+  "eyeshadow", "blush", "concealer",
+  "serum", "moisturizer", "moisturiser", "toner",
+  "sunscreen", "spf",
+  "face wash", "facewash", "cleanser", "scrub",
+  "face mask",
+  "perfume", "fragrance", "deodorant", "cologne",
+  "body lotion", "body wash",
   "shampoo", "conditioner", "hair oil", "hair color", "hair colour",
-  "nail", "nails", "nail polish", "nail art", "jewellery", "jewelry",
-  "necklace", "bracelet", "ring", "earring", "earrings", "pendant",
-  "watch", "watches", "bag", "bags", "handbag", "purse", "wallet",
-  "clutch", "backpack", "luggage", "suitcase", "sunglasses", "glasses",
-  "cap", "hat", "scarf", "stole", "dupatta", "belt", "belts",
-  "supplement", "vitamin", "protein", "nutrition", "health",
+  "nail polish", "nail art",
+  "jewellery", "jewelry",
+  "necklace", "bracelet", "ring",
+  "earring", "earrings", "pendant",
+  "watch", "watches",
+  "handbag", "purse", "wallet",
+  "clutch bag", "backpack", "luggage", "suitcase",
+  "sunglasses", "eyeglasses",
+  "cap", "hat",
+  "scarf", "stole", "dupatta",
+  "belt", "belts",
+  "supplement", "vitamin", "protein", "nutrition",
   "electronics", "phone", "mobile", "gadget", "appliance",
-  "book", "books", "stationery", "toy", "toys",
+  "book", "books", "stationery",
+   "tote", "tote bag",
+  "bag", "bags",      
+  "sling bag", "shoulder bag", "messenger bag",
+  "toy", "toys",
+   "pouch",
 ];
+
+/**
+ * detectSizeMode — checks each level (subtype → type → category) independently.
+ * Most specific level wins: if subtype says SHOES, we use SHOES regardless of
+ * what the category name says (e.g. "Bags & Footwear" → "Men Footwear" → "Men Casual Shoes").
+ *
+ * Within each level, priority is: SHOES > CLOTHING > NONE > (unknown)
+ */
+function detectLevelMode(name: string): SizeMode | null {
+  const n = name.toLowerCase();
+
+  for (const kw of SHOE_KEYWORDS) {
+    if (n.includes(kw)) return "SHOES";
+  }
+  for (const kw of CLOTHING_KEYWORDS) {
+    if (n.includes(kw)) return "CLOTHING";
+  }
+  for (const kw of NO_SIZE_KEYWORDS) {
+    if (n.includes(kw)) return "NONE";
+  }
+
+  return null; // this level gave no signal — try the next
+}
 
 function detectSizeMode(names: string[]): SizeMode {
-  const combined = names.join(" ").toLowerCase();
-
-  // Check no-size first (most specific win)
-  for (const kw of NO_SIZE_KEYWORDS) {
-    if (combined.includes(kw)) return "NONE";
-  }
-  // Then shoes
-  for (const kw of SHOE_KEYWORDS) {
-    if (combined.includes(kw)) return "SHOES";
-  }
-  // Then clothing
-  for (const kw of CLOTHING_KEYWORDS) {
-    if (combined.includes(kw)) return "CLOTHING";
+  // names = [categoryName, typeName, subtypeName] — most specific last
+  // We check from most specific (subtype) to least specific (category)
+  // so that "Men Casual Shoes" subtype wins over "Bags & Footwear" category.
+  for (let i = names.length - 1; i >= 0; i--) {
+    const mode = detectLevelMode(names[i]);
+    if (mode !== null) return mode;
   }
 
-  // Default: show clothing sizes as a safe fallback for unknown categories
+  // No level gave a clear signal — default to clothing sizes
   return "CLOTHING";
 }
 
