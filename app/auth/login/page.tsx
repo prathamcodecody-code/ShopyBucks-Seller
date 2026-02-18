@@ -4,13 +4,13 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/app/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { 
-  ShieldCheck, 
-  ArrowLeft, 
-  Loader2, 
-  Store, 
-  TrendingUp, 
-  CheckCircle2 
+import {
+  ShieldCheck,
+  ArrowLeft,
+  Loader2,
+  Store,
+  TrendingUp,
+  CheckCircle2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -28,17 +28,36 @@ export default function SellerAuthPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
+  const [redirecting, setRedirecting] = useState(false);
 
-  const handleSuccess = async (token: string, user: any) => {
+  /* ─────────────────────────────────────────────
+     After any successful auth response:
+     1. loginWithToken stores token + fetches user
+     2. We use the API response's user (not context state) for immediate redirect
+        because React state may not have updated yet
+  ───────────────────────────────────────────── */
+  const handleSuccess = async (token: string, apiUser: any) => {
+    if (redirecting) return;
+    setRedirecting(true);
+
+    // This now awaits the user fetch internally
     await loginWithToken(token);
-    if (user.role === "ADMIN") {
-      router.replace("/admin/dashboard");
-    } else if (user.role === "SELLER" && user.sellerStatus === "APPROVED") {
-      router.replace("/dashboard");
+
+    // Use apiUser from the response — don't rely on context state timing
+    let redirectTo = "/auth/login";
+    if (apiUser.role === "ADMIN") {
+      redirectTo = "/admin/dashboard";
+    } else if (apiUser.role === "SELLER" && apiUser.sellerStatus === "APPROVED") {
+      redirectTo = "/dashboard";
     } else {
-      router.replace("/seller/onboarding");
+      redirectTo = "/seller/onboarding";
     }
+
+    // Hard redirect so middleware re-evaluates with the new cookie
+    window.location.href = redirectTo;
   };
+
+  /* ─────────────────── AUTH HANDLERS ─────────────────── */
 
   const loginPassword = async () => {
     setLoading(true);
@@ -47,6 +66,7 @@ export default function SellerAuthPage() {
       await handleSuccess(res.data.token, res.data.user);
     } catch {
       alert("Invalid email or password");
+      setRedirecting(false);
     } finally {
       setLoading(false);
     }
@@ -71,6 +91,7 @@ export default function SellerAuthPage() {
       await handleSuccess(res.data.token, res.data.user);
     } catch {
       alert("Invalid OTP");
+      setRedirecting(false);
     } finally {
       setLoading(false);
     }
@@ -95,6 +116,7 @@ export default function SellerAuthPage() {
       await handleSuccess(res.data.token, res.data.user);
     } catch {
       alert("Invalid OTP");
+      setRedirecting(false);
     } finally {
       setLoading(false);
     }
@@ -102,23 +124,23 @@ export default function SellerAuthPage() {
 
   return (
     <main className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-white font-sans text-amazon-text">
-      
-      {/* LEFT PANEL - BRANDING (Visible on Desktop) */}
+
+      {/* LEFT PANEL - BRANDING */}
       <section className="hidden lg:flex flex-col justify-between bg-amazon-darkBlue p-16 text-white relative overflow-hidden">
         <div className="relative z-10">
           <Link href="/" className="inline-block mb-12">
-             <div className="flex items-center text-3xl font-black uppercase tracking-tighter">
-                <div className="relative w-32 md:w-44 transition-transform group-hover:scale-105 duration-300">
-                  <img src="/shopybucks.jpg" alt="ShopyBucks Logo" className="w-full h-auto object-contain" />
-                </div>
-             </div>
+            <div className="flex items-center text-3xl font-black uppercase tracking-tighter">
+              <div className="relative w-32 md:w-44 transition-transform group-hover:scale-105 duration-300">
+                <img src="/shopybucks.jpg" alt="ShopyBucks Logo" className="w-full h-auto object-contain" />
+              </div>
+            </div>
           </Link>
-          
+
           <h2 className="text-5xl font-black leading-tight mb-8">
             Scale your business with <br />
             <span className="text-amazon-orange italic underline decoration-4 underline-offset-8">Zero Commission</span>
           </h2>
-          
+
           <ul className="space-y-6">
             {[
               { icon: <Store className="text-amazon-orange" />, text: "Reach 50 Million+ Customers" },
@@ -141,58 +163,76 @@ export default function SellerAuthPage() {
           </div>
         </div>
 
-        {/* Decorative Circle */}
         <div className="absolute -bottom-20 -left-20 w-[500px] h-[500px] bg-amazon-orange/5 rounded-full blur-3xl" />
       </section>
 
       {/* RIGHT PANEL - AUTH FORMS */}
       <section className="flex flex-col items-center justify-center p-8 lg:p-24 relative bg-amazon-lightGray lg:bg-white">
-        
+
         {/* Mobile Header */}
         <div className="lg:hidden mb-12 text-center">
-            <div className="flex items-center text-2xl font-black uppercase tracking-tighter mb-2">
-                <div className="relative w-32 md:w-44 transition-transform group-hover:scale-105 duration-300">
-                  <img src="/shopybucks.jpg" alt="ShopyBucks Logo" className="w-full h-auto object-contain" />
-                </div>
+          <div className="flex items-center text-2xl font-black uppercase tracking-tighter mb-2">
+            <div className="relative w-32 md:w-44 transition-transform group-hover:scale-105 duration-300">
+              <img src="/shopybucks.jpg" alt="ShopyBucks Logo" className="w-full h-auto object-contain" />
             </div>
-            <p className="text-xs font-black uppercase tracking-widest text-amazon-mutedText">Seller Central</p>
+          </div>
+          <p className="text-xs font-black uppercase tracking-widest text-amazon-mutedText">Seller Central</p>
         </div>
 
         <div className="w-full max-w-[420px] bg-white lg:bg-transparent p-8 lg:p-0 rounded-[2.5rem] shadow-xl lg:shadow-none border border-gray-100 lg:border-none">
-          
+
           {/* Form Header */}
           <div className="mb-10 text-center lg:text-left">
             <h1 className="text-3xl font-black tracking-tight text-amazon-darkBlue">
               {step === "signup" ? "Get Started" : "Welcome Back"}
             </h1>
             <p className="text-amazon-mutedText font-bold mt-2">
-              {step === "signup" ? "Enter details to create your seller account" : "Manage your store and orders seamlessly"}
+              {step === "signup"
+                ? "Enter details to create your seller account"
+                : "Manage your store and orders seamlessly"}
             </p>
           </div>
 
           <div className="space-y-5">
+
             {/* LOGIN PASSWORD */}
             {step === "loginPassword" && (
               <>
                 <AuthInput label="Email Address" placeholder="name@company.com" value={email} onChange={setEmail} />
                 <AuthInput label="Password" type="password" placeholder="••••••••" value={password} onChange={setPassword} />
                 <div className="pt-2">
-                    <SubmitButton loading={loading} onClick={loginPassword}>Log in to Dashboard</SubmitButton>
+                  <SubmitButton loading={loading || redirecting} onClick={loginPassword}>
+                    Log in to Dashboard
+                  </SubmitButton>
                 </div>
-                
+
                 <div className="relative py-4">
-                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
-                    <div className="relative flex justify-center text-xs uppercase font-black"><span className="bg-white lg:bg-white px-4 text-amazon-mutedText tracking-widest">Or continue with</span></div>
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase font-black">
+                    <span className="bg-white lg:bg-white px-4 text-amazon-mutedText tracking-widest">Or continue with</span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                    <button onClick={() => setStep("loginOtpSend")} className="py-3 border-2 border-gray-100 rounded-xl font-bold text-sm hover:border-amazon-orange hover:bg-amazon-orange/5 transition-all">Login with OTP</button>
-                    <button onClick={() => setStep("signup")} className="py-3 border-2 border-gray-100 rounded-xl font-bold text-sm hover:border-amazon-orange hover:bg-amazon-orange/5 transition-all">Create Account</button>
+                  <button
+                    onClick={() => setStep("loginOtpSend")}
+                    className="py-3 border-2 border-gray-100 rounded-xl font-bold text-sm hover:border-amazon-orange hover:bg-amazon-orange/5 transition-all"
+                  >
+                    Login with OTP
+                  </button>
+                  <button
+                    onClick={() => setStep("signup")}
+                    className="py-3 border-2 border-gray-100 rounded-xl font-bold text-sm hover:border-amazon-orange hover:bg-amazon-orange/5 transition-all"
+                  >
+                    Create Account
+                  </button>
                 </div>
               </>
             )}
 
-            {/* OTP FLOWS */}
+            {/* OTP SEND */}
             {step === "loginOtpSend" && (
               <>
                 <BackButton onClick={() => setStep("loginPassword")} />
@@ -201,14 +241,24 @@ export default function SellerAuthPage() {
               </>
             )}
 
+            {/* OTP VERIFY */}
             {(step === "loginOtpVerify" || step === "signupOtp") && (
               <>
                 <div className="text-center bg-amazon-orange/10 p-4 rounded-2xl mb-4">
-                    <p className="text-sm font-bold text-amazon-darkBlue">Enter code sent to <span className="underline">{phone}</span></p>
+                  <p className="text-sm font-bold text-amazon-darkBlue">
+                    Enter code sent to <span className="underline">{phone}</span>
+                  </p>
                 </div>
-                <AuthInput label="OTP" placeholder="XXXXXX" maxLength={6} value={otp} onChange={setOtp} className="text-center tracking-[1em] text-2xl font-black" />
-                <SubmitButton loading={loading} onClick={step === "signupOtp" ? verifySignupOtp : verifyLoginOtp}>
-                   Verify & Access Dashboard
+                <AuthInput
+                  label="OTP"
+                  placeholder="XXXXXX"
+                  maxLength={6}
+                  value={otp}
+                  onChange={setOtp}
+                  className="text-center tracking-[1em] text-2xl font-black"
+                />
+                <SubmitButton loading={loading || redirecting} onClick={step === "signupOtp" ? verifySignupOtp : verifyLoginOtp}>
+                  Verify & Access Dashboard
                 </SubmitButton>
               </>
             )}
@@ -218,8 +268,8 @@ export default function SellerAuthPage() {
               <>
                 <BackButton onClick={() => setStep("loginPassword")} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <AuthInput label="Business Name" placeholder="Store name" value={name} onChange={setName} />
-                    <AuthInput label="Work Email" placeholder="email@biz.com" value={email} onChange={setEmail} />
+                  <AuthInput label="Business Name" placeholder="Store name" value={name} onChange={setName} />
+                  <AuthInput label="Work Email" placeholder="email@biz.com" value={email} onChange={setEmail} />
                 </div>
                 <AuthInput label="Phone Number" placeholder="+91" value={phone} onChange={setPhone} />
                 <AuthInput label="Create Password" type="password" placeholder="Min 8 characters" value={password} onChange={setPassword} />
@@ -233,7 +283,7 @@ export default function SellerAuthPage() {
   );
 }
 
-/* SUB-COMPONENTS */
+/* ─────────────────── SUB-COMPONENTS ─────────────────── */
 
 function AuthInput({ label, value, onChange, type = "text", placeholder, className = "", ...props }: any) {
   return (
@@ -265,7 +315,10 @@ function SubmitButton({ children, onClick, loading }: any) {
 
 function BackButton({ onClick }: any) {
   return (
-    <button onClick={onClick} className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-amazon-mutedText hover:text-amazon-orange transition-colors mb-4">
+    <button
+      onClick={onClick}
+      className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-amazon-mutedText hover:text-amazon-orange transition-colors mb-4"
+    >
       <ArrowLeft size={16} /> Back
     </button>
   );
