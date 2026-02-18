@@ -1,27 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  ClipboardList, 
-  BarChart3, 
-  Settings, 
-  Store, 
+import { useAuth } from "@/app/context/AuthContext";
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  ClipboardList,
+  BarChart3,
+  Settings,
+  Store,
   Bell,
   Tag,
   IndianRupeeIcon,
   PiggyBank,
   Menu,
   X,
-  LogOut
+  LogOut,
 } from "lucide-react";
 
 export default function SellerSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
+  const { logout } = useAuth(); // ✅ Use context logout — it handles cookie + localStorage + state
   const [open, setOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -38,7 +39,8 @@ export default function SellerSidebar() {
   ];
 
   const LinkItem = (href: string, label: string, Icon: any) => {
-    const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+    const isActive =
+      pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
     return (
       <Link
         href={href}
@@ -63,7 +65,7 @@ export default function SellerSidebar() {
     <>
       {/* MOBILE HEADER */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b-4 border-amazon-darkBlue flex items-center px-4 z-40">
-        <button 
+        <button
           onClick={() => setOpen(true)}
           className="p-2 bg-amazon-orange border-2 border-amazon-darkBlue rounded-lg shadow-[2px_2px_0px_0px_rgba(19,25,33,1)]"
         >
@@ -103,8 +105,8 @@ export default function SellerSidebar() {
 
           <div className="flex flex-col">
             <div className="relative w-32 md:w-44 transition-transform group-hover:scale-105 duration-300">
-                  <img src="/shopybucks.jpg" alt="ShopyBucks Logo" className="w-full h-auto object-contain" />
-                </div>
+              <img src="/shopybucks.jpg" alt="ShopyBucks Logo" className="w-full h-auto object-contain" />
+            </div>
             <div className="mt-1 flex items-center gap-2 text-[10px] font-bold bg-amazon-darkBlue text-white px-2 py-0.5 rounded-full w-fit uppercase tracking-widest">
               <Store size={10} />
               Seller Central
@@ -115,11 +117,11 @@ export default function SellerSidebar() {
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-amazon-borderGray hover:scrollbar-thumb-amazon-orange">
           <nav className="mt-2">
-            <p className="px-4 text-[10px] font-black text-amazon-mutedText uppercase tracking-[0.2em] mb-4">Seller Menu</p>
+            <p className="px-4 text-[10px] font-black text-amazon-mutedText uppercase tracking-[0.2em] mb-4">
+              Seller Menu
+            </p>
             {links.map((link) => (
-              <div key={link.href}>
-                {LinkItem(link.href, link.name, link.icon)}
-              </div>
+              <div key={link.href}>{LinkItem(link.href, link.name, link.icon)}</div>
             ))}
           </nav>
         </div>
@@ -142,7 +144,7 @@ export default function SellerSidebar() {
         </div>
       </aside>
 
-      {/* LOGOUT CONFIRM MODAL (Matches your Admin style) */}
+      {/* LOGOUT CONFIRM MODAL */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[60] bg-amazon-darkBlue/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white border-4 border-amazon-darkBlue rounded-2xl shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] p-8 w-full max-w-sm">
@@ -155,10 +157,7 @@ export default function SellerSidebar() {
 
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => {
-                  localStorage.clear();
-                  router.push("/login");
-                }}
+                onClick={() => logout()} // ✅ Single source of truth
                 className="w-full py-4 bg-red-600 text-white border-4 border-amazon-darkBlue rounded-xl font-black uppercase tracking-tighter shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
               >
                 Yes, Logout
