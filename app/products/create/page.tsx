@@ -57,13 +57,6 @@ const CLOTHING_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "3XL", "4XL"];
 
 const SHOE_SIZES = ["4", "5", "6", "7", "8", "9", "10", "11", "12", "13"];
 
-/* 
-  Size Mode Detection — keyword based on category / type / subtype names
-  We match against lowercased name strings. 
-  Priority: SHOES > CLOTHING > NONE
-*/
-
-// SHOES — highest priority, checked FIRST
 const SHOE_KEYWORDS = [
   "shoe", "shoes",
   "sneaker", "sneakers",
@@ -131,6 +124,7 @@ const NO_SIZE_KEYWORDS = [
   "earring", "earrings", "pendant",
   "watch", "watches",
   "handbag", "purse", "wallet",
+  "home",
   "clutch bag", "backpack", "luggage", "suitcase",
   "sunglasses", "eyeglasses",
   "cap", "hat",
@@ -146,13 +140,6 @@ const NO_SIZE_KEYWORDS = [
    "pouch",
 ];
 
-/**
- * detectSizeMode — checks each level (subtype → type → category) independently.
- * Most specific level wins: if subtype says SHOES, we use SHOES regardless of
- * what the category name says (e.g. "Bags & Footwear" → "Men Footwear" → "Men Casual Shoes").
- *
- * Within each level, priority is: SHOES > CLOTHING > NONE > (unknown)
- */
 function detectLevelMode(name: string): SizeMode | null {
   const n = name.toLowerCase();
 
@@ -224,6 +211,9 @@ export default function CreateProductPage() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [weight, setWeight] = useState("");
+  const [length, setLength] = useState("");
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
   const [baseColor, setBaseColor] = useState("");
 
   const [categories, setCategories] = useState<any[]>([]);
@@ -536,73 +526,128 @@ export default function CreateProductPage() {
             <div className="lg:col-span-2 space-y-6">
 
               {/* Basic Info */}
-              <div className="bg-white rounded-xl shadow-sm border border-amazon-borderGray p-6">
-                <div className="flex items-center gap-3 pb-4 border-b border-amazon-borderGray mb-6">
-                  <div className="p-2 bg-blue-50 rounded-lg">
-                    <Package size={20} className="text-blue-600" />
-                  </div>
-                  <h2 className="text-lg font-black text-amazon-text">Basic Information</h2>
-                </div>
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-bold text-amazon-text mb-2">Product Title *</label>
-                    <input
-                      type="text"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="e.g. Men's Cotton T-Shirt"
-                      className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-amazon-text mb-2">Description *</label>
-                    <textarea
-                      rows={4}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Describe your product features, materials, care instructions..."
-                      className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 resize-none transition-all"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-bold text-amazon-text mb-2">Base Price (₹) *</label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-3.5 text-amazon-mutedText font-bold">₹</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={price}
-                          onChange={(e) => setPrice(e.target.value)}
-                          placeholder="999"
-                          className="w-full pl-8 pr-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 transition-all font-bold"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-amazon-text mb-2">Weight (grams) *</label>
-                      <input
-                        type="number"
-                        value={weight}
-                        onChange={(e) => setWeight(e.target.value)}
-                        placeholder="300"
-                        className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 transition-all font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-bold text-amazon-text mb-2">Base Color</label>
-                      <select
-                        value={baseColor}
-                        onChange={(e) => setBaseColor(e.target.value)}
-                        className="w-full px-4 py-3 border-2 border-amazon-borderGray rounded-lg focus:outline-none focus:border-amazon-orange focus:ring-2 focus:ring-amazon-orange/20 bg-white transition-all font-bold"
-                      >
-                        <option value="">Select...</option>
-                        {COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <div className="bg-white border border-genz-border rounded-genz p-8 shadow-sm">
+  {/* Header */}
+  <div className="flex items-center gap-4 pb-6 border-b border-genz-border mb-8">
+    <div className="p-3 bg-orange-50 rounded-2xl">
+      <Package size={24} className="text-genz-accent" />
+    </div>
+    <div>
+      <h2 className="text-xl font-black uppercase tracking-tight text-genz-ink">
+        Basic Information
+      </h2>
+      <p className="text-xs font-bold text-genz-muted uppercase tracking-widest">
+        Product Identity & Logistics
+      </p>
+    </div>
+  </div>
+
+  <div className="space-y-8">
+    {/* Product Title */}
+    <div className="group">
+      <label className="block text-[11px] font-black uppercase tracking-widest text-genz-ink mb-2 transition-colors group-focus-within:text-genz-accent">
+        Product Title <span className="text-genz-accent">*</span>
+      </label>
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="e.g. Vintage Oversized Hoodie"
+        className="w-full px-5 py-4 bg-genz-bg border border-genz-border rounded-2xl text-sm font-bold focus:outline-none focus:border-genz-accent focus:bg-white transition-all placeholder:text-genz-muted/40 shadow-sm focus:shadow-orange-500/10"
+      />
+    </div>
+
+    {/* Description */}
+    <div className="group">
+      <label className="block text-[11px] font-black uppercase tracking-widest text-genz-ink mb-2 transition-colors group-focus-within:text-genz-accent">
+        Description <span className="text-genz-accent">*</span>
+      </label>
+      <textarea
+        rows={4}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Describe materials, fit, and vibes..."
+        className="w-full px-5 py-4 bg-genz-bg border border-genz-border rounded-2xl text-sm font-bold focus:outline-none focus:border-genz-accent focus:bg-white resize-none transition-all placeholder:text-genz-muted/40 shadow-sm"
+      />
+    </div>
+
+    {/* Price & Weight Row */}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="group">
+        <label className="block text-[11px] font-black uppercase tracking-widest text-genz-ink mb-2">
+          Base Price (₹) <span className="text-genz-accent">*</span>
+        </label>
+        <div className="relative">
+          <span className="absolute left-5 top-1/2 -translate-y-1/2 text-genz-muted font-black">₹</span>
+          <input
+            type="number"
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="999"
+            className="w-full pl-10 pr-5 py-4 bg-genz-bg border border-genz-border rounded-2xl text-sm font-black focus:outline-none focus:border-genz-accent focus:bg-white transition-all shadow-sm"
+          />
+        </div>
+      </div>
+
+      <div className="group">
+        <label className="block text-[11px] font-black uppercase tracking-widest text-genz-ink mb-2">
+          Weight (g) <span className="text-genz-accent">*</span>
+        </label>
+        <input
+          type="number"
+          value={weight}
+          onChange={(e) => setWeight(e.target.value)}
+          placeholder="300"
+          className="w-full px-5 py-4 bg-genz-bg border border-genz-border rounded-2xl text-sm font-black focus:outline-none focus:border-genz-accent focus:bg-white transition-all shadow-sm"
+        />
+      </div>
+
+      <div className="group">
+        <label className="block text-[11px] font-black uppercase tracking-widest text-genz-ink mb-2">
+          Base Color
+        </label>
+        <select
+          value={baseColor}
+          onChange={(e) => setBaseColor(e.target.value)}
+          className="w-full px-5 py-4 bg-genz-bg border border-genz-border rounded-2xl text-sm font-bold focus:outline-none focus:border-genz-accent focus:bg-white transition-all shadow-sm cursor-pointer appearance-none"
+        >
+          <option value="">Select...</option>
+          {COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+    </div>
+
+    {/* Dimensions Grid (Bento Style) */}
+    <div className="p-6 bg-genz-bg border border-genz-border rounded-3xl">
+      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-genz-muted mb-6 flex items-center gap-2">
+        <Ruler size={14} className="text-genz-accent" /> Package Dimensions (CM)
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {['Length', 'Width', 'Height'].map((dim) => (
+          <div key={dim} className="group">
+            <label className="block text-[10px] font-black uppercase tracking-widest text-genz-muted mb-2 group-focus-within:text-genz-accent">
+              {dim}
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              value={dim === 'Length' ? length : dim === 'Width' ? width : height}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (dim === 'Length') setLength(val);
+                else if (dim === 'Width') setWidth(val);
+                else setHeight(val);
+              }}
+              placeholder="0.0"
+              className="w-full px-4 py-3 bg-white border border-genz-border rounded-xl text-sm font-black focus:outline-none focus:border-genz-accent transition-all shadow-sm"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+</div>
 
               {/* Category */}
               <div className="bg-white rounded-xl shadow-sm border border-amazon-borderGray p-6">
