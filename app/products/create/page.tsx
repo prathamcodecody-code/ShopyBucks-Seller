@@ -426,19 +426,32 @@ export default function CreateProductPage() {
   const itemWidth = Number(width);
   const itemHeight = Number(height);
    
-  if (!itemLength || itemLength <= 0 || isNaN(itemLength)) {
-    alert("Please enter a valid length");
+   if (!length || !length.trim()) {
+    alert("Please enter length");
     return;
   }
-  if (!itemWidth || itemWidth <= 0 || isNaN(itemWidth)) {
-    alert("Please enter a valid width");
+  if (!width || !width.trim()) {
+    alert("Please enter width");
     return;
   }
-  if (!itemHeight || itemHeight <= 0 || isNaN(itemHeight)) {
-    alert("Please enter a valid height");
+  if (!height || !height.trim()) {
+    alert("Please enter height");
     return;
   }
 
+   if (isNaN(itemLength) || itemLength <= 0 || itemLength > 200) {
+    alert("Length must be between 0.1 and 200 cm");
+    return;
+  }
+  if (isNaN(itemWidth) || itemWidth <= 0 || itemWidth > 200) {
+    alert("Width must be between 0.1 and 200 cm");
+    return;
+  }
+  if (isNaN(itemHeight) || itemHeight <= 0 || itemHeight > 200) {
+    alert("Height must be between 0.1 and 200 cm");
+    return;
+  }
+  
     const skus = flattenSkus();
     if (!skus.length || !skus.some((s) => s.color)) {
       alert("Please add at least one color variant");
