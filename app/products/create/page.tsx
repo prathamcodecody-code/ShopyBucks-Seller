@@ -422,6 +422,23 @@ export default function CreateProductPage() {
       return;
     }
 
+     const itemLength = Number(length);
+  const itemWidth = Number(width);
+  const itemHeight = Number(height);
+   
+  if (!itemLength || itemLength <= 0 || isNaN(itemLength)) {
+    alert("Please enter a valid length");
+    return;
+  }
+  if (!itemWidth || itemWidth <= 0 || isNaN(itemWidth)) {
+    alert("Please enter a valid width");
+    return;
+  }
+  if (!itemHeight || itemHeight <= 0 || isNaN(itemHeight)) {
+    alert("Please enter a valid height");
+    return;
+  }
+
     const skus = flattenSkus();
     if (!skus.length || !skus.some((s) => s.color)) {
       alert("Please add at least one color variant");
@@ -442,6 +459,10 @@ export default function CreateProductPage() {
       fd.append("subtypeId", String(Number(subtypeId)));
       fd.append("price", String(basePrice));
       fd.append("weight", String(itemWeight));
+      fd.append("length", String(itemLength));
+      fd.append("width", String(itemWidth));
+      fd.append("height", String(itemHeight));
+      
       fd.append("baseColor", baseColor || variants[0]?.color || "");
 
       if (discountType && discountValue) {
