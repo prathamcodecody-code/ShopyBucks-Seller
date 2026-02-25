@@ -34,7 +34,7 @@ export default function SellerOrderDetailsPage() {
   const downloadInvoice = async (sellerOrderId: number) => {
     try {
       const res = await api.get(
-        `/api/seller/invoice/${sellerOrderId}`,
+       `/api/invoices/${sellerOrderId}`,
         { responseType: "blob" }
       );
 
@@ -369,3 +369,4 @@ export default function SellerOrderDetailsPage() {
     </SellerLayout>
   );
 }
+
