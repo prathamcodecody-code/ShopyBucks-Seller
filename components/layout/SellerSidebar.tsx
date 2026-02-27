@@ -18,6 +18,9 @@ import {
   Menu,
   X,
   LogOut,
+  Tv,
+  IndianRupee,
+  Wallet,
 } from "lucide-react";
 
 export default function SellerSidebar() {
@@ -31,10 +34,12 @@ export default function SellerSidebar() {
     { name: "Notifications", href: "/notifications", icon: Bell },
     { name: "Products", href: "/products", icon: ShoppingBag },
     { name: "Orders", href: "/orders", icon: ClipboardList },
+    { name: "Campaigns", href: "/campaigns", icon: Tv },
     { name: "Analytics", href: "/analytics", icon: BarChart3 },
     { name: "Sales", href: "/sales", icon: Tag },
     { name: "Payouts", href: "/payouts", icon: IndianRupeeIcon },
     { name: "Bank", href: "/bank", icon: PiggyBank },
+    { name: "Wallet", href: "/wallet", icon: Wallet },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
