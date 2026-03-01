@@ -29,6 +29,7 @@ type Campaign = {
   totalCredits: number;
   createdAt: string;
   products: CampaignProduct[];
+  reviews?: { note: string }[];
 };
 
 export default function SellerCampaignListPage() {
@@ -230,6 +231,20 @@ export default function SellerCampaignListPage() {
                           <HiOutlinePlay size={16} /> Resume
                         </button>
                       )}
+
+                     {c.status === "REJECTED" && c.reviews?.[0]?.note && (
+  <div className="mt-6 w-full bg-red-50 border-4 border-amazon-danger p-4 rounded-2xl shadow-[6px_6px_0px_0px_rgba(177,39,4,1)] animate-in fade-in slide-in-from-top-2 duration-300">
+    <div className="flex items-center gap-2 mb-2">
+      <div className="w-2 h-2 bg-amazon-danger rounded-full animate-pulse" />
+      <p className="text-[10px] font-black text-amazon-danger uppercase tracking-[0.2em]">
+        Rejection Reason
+      </p>
+    </div>
+    <p className="text-sm font-bold text-amazon-darkBlue italic leading-relaxed">
+      "{c.reviews[0].note}"
+    </p>
+  </div>
+)}
 
                       {(c.status === "ACTIVE" || c.status === "PAUSED" || c.status === "PENDING") && (
                         <button
