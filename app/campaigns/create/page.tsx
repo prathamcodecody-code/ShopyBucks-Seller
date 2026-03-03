@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import SellerLayout from "@/components/layout/SellerLayout";
 
+// Constant for the new rate
+const CREDITS_PER_CLICK = 0.3;
+
 type SellerWallet = {
   totalCredits: number;
   lockedCredits: number;
@@ -40,31 +43,34 @@ export default function CreateCampaignPage() {
   });
 
   /* ================= LOAD WALLET & PRODUCTS ================= */
-useEffect(() => {
-  (async () => {
-    try {
-      const [walletRes, productRes] = await Promise.all([
-        api.get("/seller/wallet"),
-        api.get("/seller/products"),
-      ]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const [walletRes, productRes] = await Promise.all([
+          api.get("/seller/wallet"),
+          api.get("/seller/products"),
+        ]);
 
-      setWallet(walletRes.data);
+        setWallet(walletRes.data);
 
-      const productList =
-        Array.isArray(productRes.data)
-          ? productRes.data
-          : productRes.data?.products ?? [];
+        const productList =
+          Array.isArray(productRes.data)
+            ? productRes.data
+            : productRes.data?.products ?? [];
 
-      setProducts(productList);
-    } catch (err) {
-      console.error("Data fetch failed", err);
-      setProducts([]); // prevent crash
-    }
-  })();
-}, []);
+        setProducts(productList);
+      } catch (err) {
+        console.error("Data fetch failed", err);
+        setProducts([]); 
+      }
+    })();
+  }, []);
 
   const availableCredits = (wallet?.totalCredits ?? 0) - (wallet?.lockedCredits ?? 0);
   const totalAllocatedCredits = form.products.reduce((sum, p) => sum + p.credits, 0);
+
+  // Helper to calculate clicks based on credits
+  const calculateClicks = (credits: number) => Math.floor(credits / CREDITS_PER_CLICK);
 
   /* ================= PRODUCT TOGGLE ================= */
   const toggleProduct = (p: SellerProduct) => {
@@ -83,7 +89,7 @@ useEffect(() => {
             productId: p.id,
             title: p.title,
             img: p.img1 ?? null,
-            credits: 1,
+            credits: 1, // Default 1 credit
           },
         ],
       });
@@ -135,8 +141,14 @@ useEffect(() => {
 
         {/* WALLET MINI-CARD */}
         <div className="bg-amazon-lightGray border border-amazon-borderGray rounded-md p-4 mb-8 flex justify-between items-center">
-          <span className="text-sm font-medium">Available Balance:</span>
-          <span className="text-lg font-bold text-amazon-navy">{availableCredits} Credits</span>
+          <div className="flex flex-col">
+            <span className="text-xs text-amazon-mutedText font-bold uppercase">Available Balance</span>
+            <span className="text-lg font-bold text-amazon-navy">{availableCredits} Credits</span>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] text-amazon-orange font-bold uppercase block">Current Rate</span>
+            <span className="text-sm font-bold">1 Click = {CREDITS_PER_CLICK} Credits</span>
+          </div>
         </div>
 
         {/* STEP 1: NAME */}
@@ -205,35 +217,46 @@ useEffect(() => {
             <h2 className="font-bold text-amazon-navy mb-4">Allocate Credits per Product</h2>
             <div className="space-y-3">
               {form.products.map((p, idx) => (
-                <div key={p.productId} className="flex items-center gap-4 bg-white border border-amazon-borderGray p-3 rounded-md">
-                  <span className="flex-1 text-sm font-medium truncate">{p.title}</span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      min={1}
-                      value={p.credits}
-                      onChange={(e) => {
-                        const updated = [...form.products];
-                        updated[idx].credits = Math.max(1, Number(e.target.value));
-                        setForm({ ...form, products: updated });
-                      }}
-                      className="w-24 border border-amazon-borderGray rounded px-2 py-1 focus:ring-1 focus:ring-amazon-orange outline-none"
-                    />
-                    <span className="text-xs text-amazon-mutedText font-bold">Credits</span>
+                <div key={p.productId} className="bg-white border border-amazon-borderGray p-4 rounded-md">
+                  <div className="flex items-center gap-4 mb-3">
+                    <span className="flex-1 text-sm font-bold truncate text-amazon-navy">{p.title}</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        step={0.1}
+                        value={p.credits}
+                        onChange={(e) => {
+                          const updated = [...form.products];
+                          updated[idx].credits = Math.max(0.1, Number(e.target.value));
+                          setForm({ ...form, products: updated });
+                        }}
+                        className="w-24 border border-amazon-borderGray rounded px-2 py-1 focus:ring-1 focus:ring-amazon-orange outline-none"
+                      />
+                      <span className="text-xs text-amazon-mutedText font-bold">Credits</span>
+                    </div>
+                  </div>
+                  <div className="bg-amazon-lightGray px-3 py-1.5 rounded flex justify-between items-center">
+                    <span className="text-[10px] text-amazon-mutedText font-bold uppercase">Estimated Clicks</span>
+                    <span className="text-sm font-bold text-amazon-darkBlue">~{calculateClicks(p.credits)} Clicks</span>
                   </div>
                 </div>
               ))}
             </div>
 
             <div className="mt-6 p-4 border-t border-amazon-borderGray">
-              <div className="flex justify-between items-center mb-2">
+              <div className="flex justify-between items-center mb-1">
                 <span className="text-sm">Total Allocation:</span>
                 <span className={`font-bold ${totalAllocatedCredits > availableCredits ? "text-amazon-danger" : "text-amazon-navy"}`}>
-                  {totalAllocatedCredits} / {availableCredits}
+                  {totalAllocatedCredits.toFixed(1)} / {availableCredits} Credits
                 </span>
               </div>
+              <div className="flex justify-between items-center text-amazon-orange">
+                <span className="text-xs font-bold uppercase">Total Potential Reach:</span>
+                <span className="text-lg font-black">~{calculateClicks(totalAllocatedCredits)} Clicks</span>
+              </div>
               {totalAllocatedCredits > availableCredits && (
-                <p className="text-amazon-danger text-xs text-right">Error: Insufficient credits available</p>
+                <p className="text-amazon-danger text-xs text-right mt-2">Error: Insufficient credits available</p>
               )}
             </div>
 
@@ -263,24 +286,33 @@ useEffect(() => {
               </div>
               <div>
                 <p className="text-xs uppercase text-amazon-mutedText font-bold mb-2">Product Distribution</p>
-                <ul className="space-y-1">
+                <ul className="space-y-2">
                   {form.products.map((p) => (
-                    <li key={p.productId} className="flex justify-between text-sm">
-                      <span>{p.title}</span>
-                      <span className="font-bold">{p.credits} Credits</span>
+                    <li key={p.productId} className="flex justify-between text-sm bg-white p-2 rounded border border-amazon-borderGray/50">
+                      <span className="truncate mr-4">{p.title}</span>
+                      <div className="text-right shrink-0">
+                        <p className="font-bold">{p.credits} Credits</p>
+                        <p className="text-[10px] text-amazon-mutedText">~{calculateClicks(p.credits)} clicks</p>
+                      </div>
                     </li>
                   ))}
                 </ul>
               </div>
-              <div className="pt-2 border-t border-amazon-borderGray flex justify-between">
-                <span className="font-bold">Total Credits:</span>
-                <span className="font-bold text-amazon-orange text-lg">{totalAllocatedCredits}</span>
+              <div className="pt-2 border-t border-amazon-borderGray">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold">Total Budget:</span>
+                  <span className="font-bold text-amazon-navy text-lg">{totalAllocatedCredits.toFixed(1)} Credits</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-bold">Total Est. Clicks:</span>
+                  <span className="font-bold text-amazon-orange text-xl">{calculateClicks(totalAllocatedCredits)}</span>
+                </div>
               </div>
             </div>
 
             <div className="bg-orange-50 border border-amazon-orange/30 p-4 mt-6 rounded text-sm text-amazon-navy flex gap-3">
               <span className="text-xl">ℹ️</span>
-              <p>Your campaign will be submitted for internal review. It usually takes 24-48 hours for a campaign to go live.</p>
+              <p>Your campaign will be submitted for internal review. It usually takes 24-48 hours for a campaign to go live. Credits are deducted at a rate of {CREDITS_PER_CLICK} per click.</p>
             </div>
 
             <div className="flex gap-3 mt-8">
