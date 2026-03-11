@@ -45,9 +45,7 @@ export default function SellerAuthPage() {
 
     // Use apiUser from the response — don't rely on context state timing
     let redirectTo = "/auth/login";
-    if (apiUser.role === "ADMIN") {
-      redirectTo = "/admin/dashboard";
-    } else if (apiUser.role === "SELLER" && apiUser.sellerStatus === "APPROVED") {
+    if (apiUser.role === "SELLER" && apiUser.sellerStatus === "APPROVED") {
       redirectTo = "/dashboard";
     } else {
       redirectTo = "/seller/onboarding";
@@ -323,3 +321,4 @@ function BackButton({ onClick }: any) {
     </button>
   );
 }
+
