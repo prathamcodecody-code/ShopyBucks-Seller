@@ -14,7 +14,7 @@ export default function SellerSuspendedPage() {
   useEffect(() => {
     async function loadSellerInfo() {
       try {
-        const res = await api.get("/seller/profile");
+        const res = await api.get("/seller/me");
         
         // If not suspended, redirect to appropriate page
         if (res.data.sellerStatus === "APPROVED") {
