@@ -36,25 +36,34 @@ export default function SellerAuthPage() {
      2. We use the API response's user (not context state) for immediate redirect
         because React state may not have updated yet
   ───────────────────────────────────────────── */
-  const handleSuccess = async (token: string, apiUser: any) => {
-    if (redirecting) return;
-    setRedirecting(true);
+const handleSuccess = async (token: string, apiUser: any) => {
+  if (redirecting) return;
+  setRedirecting(true);
 
-    // This now awaits the user fetch internally
-    await loginWithToken(token);
+  // Store token
+  await loginWithToken(token);
 
-    // Use apiUser from the response — don't rely on context state timing
-    let redirectTo = "/auth/login";
-    if (apiUser.role === "SELLER" && apiUser.sellerStatus === "APPROVED") {
+  // Redirect based on status
+  let redirectTo = "/auth/login";
+  
+  if (apiUser.role === "ADMIN") {
+    redirectTo = "/admin/dashboard";
+  } else if (apiUser.role === "SELLER") {
+    // Check seller status
+    if (apiUser.sellerStatus === "SUSPENDED") {
+      redirectTo = "/seller/suspended";
+    } else if (apiUser.sellerStatus === "APPROVED") {
       redirectTo = "/dashboard";
     } else {
       redirectTo = "/seller/onboarding";
     }
+  } else {
+    redirectTo = "/seller/onboarding";
+  }
 
-    // Hard redirect so middleware re-evaluates with the new cookie
-    window.location.href = redirectTo;
-  };
-
+  // Hard redirect
+  window.location.href = redirectTo;
+};
   /* ─────────────────── AUTH HANDLERS ─────────────────── */
 
   const loginPassword = async () => {
@@ -321,4 +330,3 @@ function BackButton({ onClick }: any) {
     </button>
   );
 }
-
